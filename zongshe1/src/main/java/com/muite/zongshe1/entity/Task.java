@@ -22,6 +22,8 @@ public class Task {
     private String senderName; // 冗余字段，方便查询
     private String receiverName; // 冗余字段，方便查询
 
+    private java.util.Date createTime; // 任务创建时间（等待时间/响应指标数据源）
+
 
     public Task() {
     }
@@ -203,6 +205,14 @@ public class Task {
 
     public void setGoodsId(Integer goodsId) {
         this.goodsId = goodsId;
+    }
+
+    public java.util.Date getCreateTime() {
+        return createTime;
+    }
+
+    public void setCreateTime(java.util.Date createTime) {
+        this.createTime = createTime;
     }
 
     public String toString() {

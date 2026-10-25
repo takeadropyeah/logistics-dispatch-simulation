@@ -109,10 +109,11 @@ public class MetricsService {
             Map<String, Object> overview = getOverview();
             jdbcTemplate.update("INSERT INTO metric_snapshot(metrics) VALUES (?)",
                     objectMapper.writeValueAsString(overview));
-            // 历史与明细数据保留策略：快照3天、匹配日志与告警7天，防止无限增长
+            // 历史与明细数据保留策略：快照3天、匹配日志与告警7天、派单批次7天，防止无限增长
             jdbcTemplate.update("DELETE FROM metric_snapshot WHERE create_time < NOW() - INTERVAL 3 DAY");
             jdbcTemplate.update("DELETE FROM match_log WHERE created_at < NOW() - INTERVAL 7 DAY");
             jdbcTemplate.update("DELETE FROM alert_log WHERE create_time < NOW() - INTERVAL 7 DAY");
+            jdbcTemplate.update("DELETE FROM dispatch_batch_log WHERE create_time < NOW() - INTERVAL 7 DAY");
         } catch (Exception e) {
             log.warn("指标快照失败: {}", e.getMessage());
         }
@@ -207,7 +208,19 @@ public class MetricsService {
     private Map<String, Object> algorithmMetrics() {
         Map<String, Object> a = new LinkedHashMap<>();
         a.put("assignCostMs", simulationService != null ? simulationService.getLastAssignCostMs() : 0);
-        a.put("desc", "assignCostMs=最近一轮全量派单求解耗时；优化gap见 /metrics/gap（小规模精确枚举对比）");
+        // 全局优化派单收益：最近 20 个批次的"先到先得基线 vs 多目标优化解"平均降幅
+        try {
+            List<Map<String, Object>> batches = jdbcTemplate.queryForList(
+                    "SELECT improvement_pct FROM dispatch_batch_log ORDER BY id DESC LIMIT 20");
+            double avg = batches.stream()
+                    .map(b -> b.get("improvement_pct"))
+                    .filter(v -> v instanceof Number)
+                    .mapToDouble(v -> ((Number) v).doubleValue())
+                    .average().orElse(0);
+            a.put("recentBatchAvgImprovement", round(avg));
+            a.put("recentBatchCount", batches.size());
+        } catch (Exception ignored) { }
+        a.put("desc", "assignCostMs=最近一轮派单求解耗时；recentBatchAvgImprovement=最近20批全局优化相对先到先得基线的平均成本降幅；优化gap见 /metrics/gap");
         return a;
     }
 

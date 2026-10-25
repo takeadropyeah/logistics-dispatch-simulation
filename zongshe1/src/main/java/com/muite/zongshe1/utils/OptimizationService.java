@@ -574,4 +574,187 @@ public class OptimizationService {
 
         return totalCost;
     }
+
+    // ==================== 全局多目标派单（阶段III：接入线上主流程） ====================
+
+    /** 全局派单结果：taskId → truckId 配对，附先到先得基线成本对比 */
+    public static class AssignResult {
+        private final Map<Integer, Integer> pairs;
+        private final double planCost;
+        private final double baselineCost;
+
+        public AssignResult(Map<Integer, Integer> pairs, double planCost, double baselineCost) {
+            this.pairs = pairs;
+            this.planCost = planCost;
+            this.baselineCost = baselineCost;
+        }
+
+        public Map<Integer, Integer> getPairs() {
+            return pairs;
+        }
+
+        public double getPlanCost() {
+            return planCost;
+        }
+
+        public double getBaselineCost() {
+            return baselineCost;
+        }
+
+        /** 相对先到先得基线的成本降幅（%） */
+        public double improvementPct() {
+            return baselineCost > 0 ? Math.max(0, (baselineCost - planCost) / baselineCost * 100) : 0;
+        }
+    }
+
+    // 多目标权重（标量化口径）：
+    //   空驶公里 → C2 单位成本裁决（同批任务吨公里固定，成本最小化即单位成本最小化）+ U4 空驶 + G 碳排（与空驶同源）
+    //   装载缺口² → U2 装载率过程目标（二次罚兼顾负载均衡）
+    //   等待小时 → T2 响应 + 任务书"全局车辆总体等待时间"目标
+    //   吨公里收益 → 任务书"总运输达成吨位"目标 + 吞吐激励（蝇头小利任务自然落选）
+    private static final double W_EMPTY = 1.0;
+    private static final double W_MISMATCH = 60.0;
+    private static final double W_WAIT = 3.0;
+    private static final double W_VALUE = 0.02;
+    private static final double INFEASIBLE_PENALTY = 1e6;
+
+    /**
+     * 全局多目标派单：为一批"空闲车辆 × 待分配任务"求一对一分配（每车本轮至多 1 单）。
+     * 求解：固定种子(42)模拟退火——同批次状态相同则方案相同，派单决策可复现；
+     * 基线：按原先到先得顺序（车辆 id 序 × 任务 id 序取首个可行任务）计算同一成本函数。
+     */
+    public AssignResult multiObjectiveAssign(List<Truck> idleTrucks, List<Task> tasks) {
+        int n = Math.min(tasks.size(), 40);
+        int m = Math.min(idleTrucks.size(), 20);
+        List<Task> ts = new ArrayList<>(tasks.subList(0, n));
+        List<Truck> vs = new ArrayList<>(idleTrucks.subList(0, m));
+        long now = System.currentTimeMillis();
+
+        // 预计算：空驶km / 可行性 / 等待小时 / 吨公里收益
+        double[][] emptyKm = new double[n][m];
+        boolean[][] feasible = new boolean[n][m];
+        double[] waitH = new double[n];
+        double[] value = new double[n];
+        for (int i = 0; i < n; i++) {
+            Task task = ts.get(i);
+            double[] from = parseLatLon(task.getStart());
+            double[] dest = parseLatLon(task.getDestination());
+            double haul = (from != null && dest != null)
+                    ? DistanceUtils.calculateDistance(from[0], from[1], dest[0], dest[1]) : 0;
+            value[i] = nz(task.getWeight()).doubleValue() * haul;
+            if (task.getCreateTime() != null) {
+                waitH[i] = Math.min(24.0, (now - task.getCreateTime().getTime()) / 3600000.0);
+            }
+            for (int j = 0; j < m; j++) {
+                Truck truck = vs.get(j);
+                double[] tp = parseLatLon(truck.getLocation());
+                emptyKm[i][j] = (from == null || tp == null)
+                        ? 1e9
+                        : DistanceUtils.calculateDistance(tp[0], tp[1], from[0], from[1]);
+                feasible[i][j] = from != null && tp != null && truck.getMaxWeight() != null
+                        && nz(task.getWeight()).compareTo(nz(truck.getMaxWeight())) <= 0
+                        && nz(task.getVolume()).compareTo(nz(truck.getMaxVol())) <= 0;
+            }
+        }
+
+        // 成本函数：assign[i] = 车辆下标或 -1（不分配），每车至多 1 单
+        java.util.function.ToDoubleFunction<int[]> costFn = assign -> {
+            double f = 0;
+            for (int i = 0; i < n; i++) {
+                int j = assign[i];
+                if (j < 0) continue;
+                if (!feasible[i][j]) {
+                    f += INFEASIBLE_PENALTY;
+                    continue;
+                }
+                double cap = Math.max(1e-9, nz(vs.get(j).getMaxWeight()).doubleValue());
+                double gap = Math.max(0, 1.0 - nz(ts.get(i).getWeight()).doubleValue() / cap);
+                f += W_EMPTY * emptyKm[i][j]
+                        + W_MISMATCH * gap * gap
+                        + W_WAIT * waitH[i]
+                        - W_VALUE * value[i];
+            }
+            return f;
+        };
+
+        // 初始解：任务按吨公里收益降序 → 各取空驶最小的可行空闲车
+        int[] cur = new int[n];
+        Arrays.fill(cur, -1);
+        boolean[] used = new boolean[m];
+        Integer[] order = new Integer[n];
+        for (int i = 0; i < n; i++) order[i] = i;
+        Arrays.sort(order, (a, b) -> Double.compare(value[b], value[a]));
+        for (int idx : order) {
+            int bestJ = -1, bestKm = Integer.MAX_VALUE;
+            for (int j = 0; j < m; j++) {
+                if (used[j] || !feasible[idx][j]) continue;
+                if (emptyKm[idx][j] < bestKm) { bestKm = (int) emptyKm[idx][j]; bestJ = j; }
+            }
+            if (bestJ >= 0) { cur[idx] = bestJ; used[bestJ] = true; }
+        }
+        double curCost = costFn.applyAsDouble(cur);
+        int[] best = cur.clone();
+        double bestCost = curCost;
+
+        // 基线：先到先得（车辆 id 序 × 任务 id 序，首个可行任务）
+        int[] base = new int[n];
+        Arrays.fill(base, -1);
+        for (int j = 0; j < m; j++) {
+            for (int i = 0; i < n; i++) {
+                if (base[i] >= 0 || !feasible[i][j]) continue;
+                base[i] = j;
+                break;
+            }
+        }
+        double baseCost = costFn.applyAsDouble(base);
+
+        // 固定种子模拟退火：邻域 = 随机改派/取消一个任务（目标车已有任务则交换，保持每车≤1单）
+        Random rng = new Random(42);
+        int iterations = Math.min(4000, 200 * Math.max(n, 1));
+        double temp = 200.0;
+        for (int it = 0; it < iterations && temp > 1.0; it++) {
+            int[] cand = cur.clone();
+            int i = rng.nextInt(n);
+            int j = rng.nextInt(m + 1) - 1;
+            if (j >= 0) {
+                for (int k = 0; k < n; k++) {
+                    if (k != i && cand[k] == j) { cand[k] = cand[i]; break; }
+                }
+            }
+            cand[i] = j;
+            double c2 = costFn.applyAsDouble(cand);
+            if (c2 <= curCost || rng.nextDouble() < Math.exp(-(c2 - curCost) / temp)) {
+                cur = cand;
+                curCost = c2;
+                if (curCost < bestCost) { bestCost = curCost; best = cur.clone(); }
+            }
+            temp *= 0.995;
+        }
+
+        Map<Integer, Integer> pairs = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            if (best[i] >= 0 && feasible[i][best[i]]) {
+                pairs.put(ts.get(i).getId(), vs.get(best[i]).getId());
+            }
+        }
+        log.info("全局多目标派单求解：任务{}×车{}，基线{}→优化{}（降幅{}%），迭代{}次",
+                n, m, String.format("%.1f", baseCost), String.format("%.1f", bestCost),
+                String.format("%.1f", baseCost > 0 ? Math.max(0, (baseCost - bestCost) / baseCost * 100) : 0),
+                iterations);
+        return new AssignResult(pairs, bestCost, baseCost);
+    }
+
+    private double[] parseLatLon(String s) {
+        if (s == null || !s.contains(",")) return null;
+        try {
+            String[] p = s.split(",");
+            return new double[]{Double.parseDouble(p[1].trim()), Double.parseDouble(p[0].trim())}; // {lat, lng}
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static BigDecimal nz(BigDecimal b) {
+        return b == null ? BigDecimal.ZERO : b;
+    }
 }

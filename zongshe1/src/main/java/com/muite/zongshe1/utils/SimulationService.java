@@ -392,61 +392,130 @@ public class SimulationService {
             Set<Integer> assignedTaskIds = new HashSet<>();
             Set<Integer> usedTruckIds = new HashSet<>();
 
-            // 3. 为每个空闲车辆分配任务
-            for (Truck truck : idleTrucks) {
-                Task matchedTask = null;
-
-                for (Task task : unassignedTasks) {
-                    if (assignedTaskIds.contains(task.getId())) {
-                        continue;
-                    }
-
-                    // 检查车辆能否装载此任务
-                    BigDecimal taskWeight = task.getWeight() != null ? task.getWeight() : BigDecimal.ZERO;
-                    BigDecimal taskVolume = task.getVolume() != null ? task.getVolume() : BigDecimal.ZERO;
-
-                    if (truck.canLoad(taskWeight, taskVolume)) {
-                        matchedTask = task;
-                        break;
-                    }
-                }
-
-                if (matchedTask != null) {
-                    // 司机行为状态：候选司机按概率拒单（基准 8%，A2 驾照减半更稳定），拒单后进入 9 秒冷却，任务留待下一轮
-                    if (driverRejects(truck, matchedTask)) {
-                        continue;
-                    }
-                    assignedTaskIds.add(matchedTask.getId());
-                    try {
-                        processSingleTaskAssignment(truck, matchedTask);
-                        assignedCount++;
-                        usedTruckIds.add(truck.getId());
-                        // 记录匹配质量（以条件最优车为基准答案），供匹配精准度指标使用
-                        logMatchQuality(matchedTask, truck, idleTrucks, usedTruckIds);
-                        // 司机行为状态：为本次运输绑定一名空闲司机（空闲 → 驾驶中）；
-                        // 先检查该车辆是否已有"驾驶中"司机，避免一车多绑定的累积
-                        try {
-                            Integer bound = jdbcTemplate.queryForObject(
-                                    "SELECT COUNT(*) FROM driver WHERE truck_id=? AND status='驾驶中'",
-                                    Integer.class, truck.getId());
-                            if (bound == null || bound == 0) {
-                                jdbcTemplate.update(
-                                        "UPDATE driver SET status='驾驶中', truck_id=? WHERE status='空闲' AND truck_id IS NULL LIMIT 1",
-                                        truck.getId());
-                            }
-                        } catch (Exception e) {
-                            log.warn("绑定驾驶司机失败: {}", e.getMessage());
-                        }
-                        log.info("车辆{}分配任务{}成功", truck.getId(), matchedTask.getId());
-                    } catch (Exception e) {
-                        log.error("车辆{}分配任务{}失败: {}", truck.getId(), matchedTask.getId(), e.getMessage());
-                        assignedTaskIds.remove(matchedTask.getId());
-                    }
-                }
+            // 3. 派单路径：待分配任务≥2 时走全局多目标优化（SA 固定种子，决策可复现），
+            //    否则退化为先到先得（单任务批次无优化空间）
+            if (unassignedTasks.size() >= 2) {
+                assignedCount = globalOptimizedAssign(unassignedTasks, idleTrucks, assignedTaskIds, usedTruckIds);
+            } else {
+                assignedCount = greedyFirstFitAssign(unassignedTasks, idleTrucks, assignedTaskIds, usedTruckIds);
             }
 
             lastAssignCostMs = (System.nanoTime() - startNs) / 1_000_000;
             log.info("本轮分配完成：成功分配{}个任务", assignedCount);
+        }
+    }
+
+    /** 先到先得路径：车辆按 id 序取第一个可装载任务（保留为小批量退化路径与优化失败兜底） */
+    private int greedyFirstFitAssign(List<Task> unassignedTasks, List<Truck> idleTrucks,
+                                     Set<Integer> assignedTaskIds, Set<Integer> usedTruckIds) {
+        int assignedCount = 0;
+        for (Truck truck : idleTrucks) {
+            Task matchedTask = null;
+
+            for (Task task : unassignedTasks) {
+                if (assignedTaskIds.contains(task.getId())) {
+                    continue;
+                }
+
+                // 检查车辆能否装载此任务
+                BigDecimal taskWeight = task.getWeight() != null ? task.getWeight() : BigDecimal.ZERO;
+                BigDecimal taskVolume = task.getVolume() != null ? task.getVolume() : BigDecimal.ZERO;
+
+                if (truck.canLoad(taskWeight, taskVolume)) {
+                    matchedTask = task;
+                    break;
+                }
+            }
+
+            if (matchedTask != null && executeAssignment(truck, matchedTask, idleTrucks, usedTruckIds, assignedTaskIds)) {
+                assignedCount++;
+            }
+        }
+        return assignedCount;
+    }
+
+    /**
+     * 全局优化路径（阶段III核心）：把"空闲车辆 × 待分配任务"整批交给多目标优化器求解，
+     * 优化目标：空驶里程↓（C2单位成本/U4空驶/G碳排同源） + 装载缺口↓（U2） + 等待小时↓（T2/全局等待）
+     * + 吨公里达成↑（总运输吨位），每车本轮至多 1 单；优化失败自动回退先到先得。
+     * 批次对比数据（贪心基线 vs 优化解）写入 dispatch_batch_log，供 A 维"优化收益"指标读取。
+     */
+    private int globalOptimizedAssign(List<Task> unassignedTasks, List<Truck> idleTrucks,
+                                      Set<Integer> assignedTaskIds, Set<Integer> usedTruckIds) {
+        try {
+            OptimizationService.AssignResult result = optimizationService.multiObjectiveAssign(idleTrucks, unassignedTasks);
+            if (result == null || result.getPairs().isEmpty()) {
+                return greedyFirstFitAssign(unassignedTasks, idleTrucks, assignedTaskIds, usedTruckIds);
+            }
+
+            int assigned = 0;
+            List<Map.Entry<Integer, Integer>> entries = new ArrayList<>(result.getPairs().entrySet());
+            entries.sort(Map.Entry.comparingByKey());
+            for (Map.Entry<Integer, Integer> e : entries) {
+                Task task = unassignedTasks.stream().filter(t -> t.getId().equals(e.getKey())).findFirst().orElse(null);
+                Truck truck = idleTrucks.stream().filter(t -> t.getId().equals(e.getValue())).findFirst().orElse(null);
+                if (task == null || truck == null) continue;
+                if (executeAssignment(truck, task, idleTrucks, usedTruckIds, assignedTaskIds)) {
+                    assigned++;
+                }
+            }
+
+            try {
+                jdbcTemplate.update("INSERT INTO dispatch_batch_log(task_count, truck_count, greedy_cost, optimized_cost, improvement_pct, algorithm) " +
+                                "VALUES (?,?,?,?,?,?)",
+                        unassignedTasks.size(), idleTrucks.size(),
+                        result.getBaselineCost(), result.getPlanCost(), result.improvementPct(), "MO-SA");
+            } catch (Exception ignored) { }
+
+            log.info("全局优化派单：任务{}×车{}，先到先得基线成本{}，多目标优化{}，降幅{}%，实际分配{}单",
+                    unassignedTasks.size(), idleTrucks.size(),
+                    String.format("%.1f", result.getBaselineCost()),
+                    String.format("%.1f", result.getPlanCost()),
+                    String.format("%.1f", result.improvementPct()), assigned);
+            return assigned;
+        } catch (Exception e) {
+            log.error("全局优化派单失败，回退先到先得: ", e);
+            return greedyFirstFitAssign(unassignedTasks, idleTrucks, assignedTaskIds, usedTruckIds);
+        }
+    }
+
+    /**
+     * 执行一次"车辆-任务"分配：司机拒单判定 → 路线规划与任务落库 → 匹配质量插桩 → 绑定驾驶司机。
+     *
+     * @return true = 分配成功
+     */
+    private boolean executeAssignment(Truck truck, Task task, List<Truck> idleTrucks,
+                                      Set<Integer> usedTruckIds, Set<Integer> assignedTaskIds) {
+        // 司机行为状态：候选司机按概率拒单（基准 15%，A2 驾照减半更稳定），拒单后进入 9 秒冷却，任务留待下一轮
+        if (driverRejects(truck, task)) {
+            return false;
+        }
+        assignedTaskIds.add(task.getId());
+        try {
+            processSingleTaskAssignment(truck, task);
+            usedTruckIds.add(truck.getId());
+            // 记录匹配质量（以条件最优车为基准答案），供匹配精准度指标使用
+            logMatchQuality(task, truck, idleTrucks, usedTruckIds);
+            // 司机行为状态：为本次运输绑定一名空闲司机（空闲 → 驾驶中）；
+            // 先检查该车辆是否已有"驾驶中"司机，避免一车多绑定的累积
+            try {
+                Integer bound = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM driver WHERE truck_id=? AND status='驾驶中'",
+                        Integer.class, truck.getId());
+                if (bound == null || bound == 0) {
+                    jdbcTemplate.update(
+                            "UPDATE driver SET status='驾驶中', truck_id=? WHERE status='空闲' AND truck_id IS NULL LIMIT 1",
+                            truck.getId());
+                }
+            } catch (Exception e) {
+                log.warn("绑定驾驶司机失败: {}", e.getMessage());
+            }
+            log.info("车辆{}分配任务{}成功", truck.getId(), task.getId());
+            return true;
+        } catch (Exception e) {
+            log.error("车辆{}分配任务{}失败: {}", truck.getId(), task.getId(), e.getMessage());
+            assignedTaskIds.remove(task.getId());
+            return false;
         }
     }
 

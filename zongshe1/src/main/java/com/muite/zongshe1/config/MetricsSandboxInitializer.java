@@ -69,6 +69,18 @@ public class MetricsSandboxInitializer implements CommandLineRunner {
                     "create_time DATETIME DEFAULT CURRENT_TIMESTAMP" +
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+            // 5. 全局优化派单批次表：每轮多目标派单记录"贪心基线 vs 优化解"成本对比（A 维优化收益数据源）
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS dispatch_batch_log (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "task_count INT," +
+                    "truck_count INT," +
+                    "greedy_cost DOUBLE," +
+                    "optimized_cost DOUBLE," +
+                    "improvement_pct DOUBLE," +
+                    "algorithm VARCHAR(32)," +
+                    "create_time DATETIME DEFAULT CURRENT_TIMESTAMP" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
             // task 表补时间戳与里程列（响应时间 / 空驶里程指标的口径基础）
             try { jdbcTemplate.execute("ALTER TABLE task ADD COLUMN create_time DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (Exception ignored) { }
             try { jdbcTemplate.execute("ALTER TABLE task ADD COLUMN assign_time DATETIME"); } catch (Exception ignored) { }
