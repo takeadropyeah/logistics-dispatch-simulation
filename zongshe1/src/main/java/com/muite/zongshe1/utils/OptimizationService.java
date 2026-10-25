@@ -709,10 +709,13 @@ public class OptimizationService {
         double baseCost = costFn.applyAsDouble(base);
 
         // 固定种子模拟退火：邻域 = 随机改派/取消一个任务（目标车已有任务则交换，保持每车≤1单）
+        // 温度自适应：初温按初始解成本量级缩放，并保证迭代结束温度降到 1.0
+        // （固定初温 200 对小批次成本(~10)过热，退火近似随机游走，解不出基线）
         Random rng = new Random(42);
         int iterations = Math.min(4000, 200 * Math.max(n, 1));
-        double temp = 200.0;
-        for (int it = 0; it < iterations && temp > 1.0; it++) {
+        double temp = Math.max(20.0, Math.abs(curCost) * 0.3);
+        double coolRate = Math.pow(1.0 / temp, 1.0 / Math.max(iterations, 1));
+        for (int it = 0; it < iterations; it++) {
             int[] cand = cur.clone();
             int i = rng.nextInt(n);
             int j = rng.nextInt(m + 1) - 1;
@@ -728,7 +731,7 @@ public class OptimizationService {
                 curCost = c2;
                 if (curCost < bestCost) { bestCost = curCost; best = cur.clone(); }
             }
-            temp *= 0.995;
+            temp *= coolRate;
         }
 
         Map<Integer, Integer> pairs = new LinkedHashMap<>();
