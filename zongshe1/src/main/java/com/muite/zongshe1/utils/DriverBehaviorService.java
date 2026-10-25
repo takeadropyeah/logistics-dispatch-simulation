@@ -70,15 +70,15 @@ public class DriverBehaviorService {
     /** 休假恢复时刻（司机id → 时间戳），休假 20 秒 */
     private final Map<Integer, Long> vacationUntil = new ConcurrentHashMap<>();
 
-    /** 天气区域（经度min, 经度max, 纬度min, 纬度max） */
+    /** 天气区域（经度min, 经度max, 纬度min, 纬度max）——全部覆盖产业链节点聚集区 */
     private static final double[][] WEATHER_REGIONS = {
-            {115.0, 118.0, 38.5, 41.5},   // 京津冀
-            {119.5, 122.5, 30.0, 32.5},   // 长三角
-            {112.5, 115.5, 21.8, 23.8},   // 珠三角
-            {102.8, 105.5, 29.8, 31.5},   // 成渝
-            {113.0, 116.0, 33.8, 36.0},   // 中原
+            {115.0, 118.0, 38.5, 41.5},   // 京津冀（唐山/北京/天津）
+            {119.5, 122.5, 30.0, 32.5},   // 长三角（上海/苏州）
+            {112.5, 115.5, 21.8, 23.8},   // 珠三角（广州/佛山）
+            {121.5, 124.5, 39.5, 42.5},   // 东北（鞍山/辽东）
+            {108.0, 114.5, 37.5, 41.5},   // 晋蒙（大同/鄂尔多斯/包头）
     };
-    private static final String[] WEATHER_REGION_NAMES = {"京津冀", "长三角", "珠三角", "成渝", "中原"};
+    private static final String[] WEATHER_REGION_NAMES = {"京津冀", "长三角", "珠三角", "东北", "晋蒙"};
     private volatile int weatherRegion = -1;
     private volatile long weatherUntil = 0;
 
