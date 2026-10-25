@@ -5,8 +5,23 @@
 
 USE zongshe;
 
--- 1. 【核心证据】按日期的空驶率趋势：全局优化接入前后的对比曲线
---    （空驶率 = 空驶里程 / 总里程，按任务完成日聚合）
+-- 0. 【最核心证据】优化前后对比：按"全局优化上线时刻"切分两个时代聚合
+--    （多目标优化于 2026-10-25 17:36 接入派单主流程）
+--    预期：优化期空驶率显著低于基线期 → "全局优化性能提升"的直接证据
+SELECT CASE WHEN complete_time < '2026-10-25 17:36:00'
+            THEN '① 先到先得基线期'
+            ELSE '② 多目标优化期' END AS 阶段,
+       COUNT(*) AS 完成任务数,
+       ROUND(SUM(loaded_km), 1) AS 载重里程km,
+       ROUND(SUM(empty_km), 1) AS 空驶里程km,
+       ROUND(SUM(empty_km) / NULLIF(SUM(empty_km) + SUM(loaded_km), 0) * 100, 1) AS 空驶率百分比,
+       ROUND(AVG(TIMESTAMPDIFF(SECOND, create_time, complete_time)) / 60.0, 1) AS 平均流转分钟
+FROM task
+WHERE status = '已完成' AND complete_time IS NOT NULL AND empty_km IS NOT NULL
+GROUP BY 阶段
+ORDER BY 阶段;
+
+-- 1. 【趋势曲线】按日期的空驶率趋势
 SELECT DATE(complete_time) AS 日期,
        COUNT(*) AS 完成任务数,
        ROUND(SUM(loaded_km), 1) AS 载重里程km,
