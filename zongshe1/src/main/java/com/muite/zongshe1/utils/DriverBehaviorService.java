@@ -171,7 +171,18 @@ public class DriverBehaviorService {
             jdbcTemplate.update("INSERT INTO maintenance_record(truck_id, start_date, type, description, cost) " +
                             "VALUES (?, NOW(), '定期保养', '仿真触发：按概率进入定期保养', ?)",
                     truck.getId(), 200 + random.nextInt(800));
-            jdbcTemplate.update("UPDATE driver SET status='保养中' WHERE truck_id=?", truck.getId());
+            // 司机维保联动（行为状态"保养中"）：车辆已有绑定司机则转入保养；
+            // 未绑车的空闲车则指派一名空闲司机执行维保（该司机至保养结束释放）
+            Integer bound = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM driver WHERE truck_id=? AND status IN ('驾驶中','疲劳休息')",
+                    Integer.class, truck.getId());
+            if (bound != null && bound > 0) {
+                jdbcTemplate.update("UPDATE driver SET status='保养中' WHERE truck_id=?", truck.getId());
+            } else {
+                jdbcTemplate.update(
+                        "UPDATE driver SET status='保养中', truck_id=? WHERE status='空闲' AND truck_id IS NULL LIMIT 1",
+                        truck.getId());
+            }
         } catch (Exception e) {
             log.warn("写维保记录失败: {}", e.getMessage());
         }
@@ -200,7 +211,7 @@ public class DriverBehaviorService {
                     if (hasTask) {
                         jdbcTemplate.update("UPDATE driver SET status='驾驶中' WHERE truck_id=? AND status='疲劳休息'", truck.getId());
                     } else {
-                        jdbcTemplate.update("UPDATE driver SET status='空闲' WHERE truck_id=? AND status IN ('疲劳休息','保养中')", truck.getId());
+                        jdbcTemplate.update("UPDATE driver SET status='空闲', truck_id=NULL WHERE truck_id=? AND status IN ('疲劳休息','保养中')", truck.getId());
                     }
                     drivingTicks.remove(truckId);
                     broadcast(truck, event);
@@ -335,6 +346,21 @@ public class DriverBehaviorService {
     }
 
     // ==================== 工具 ====================
+
+    /** 天气是否正在影响指定地点（供派单侧"恶劣天气拒驾"判定） */
+    public boolean isWeatherRefusalNeeded(String location) {
+        if (weatherRegion < 0) return false;
+        double[] pos = parseLngLat(location);
+        if (pos == null) return false;
+        double[] box = WEATHER_REGIONS[weatherRegion];
+        return pos[0] >= box[0] && pos[0] <= box[1] && pos[1] >= box[2] && pos[1] <= box[3];
+    }
+
+    /** 当前天气剩余毫秒数（无天气返回默认 60 秒） */
+    public long getWeatherRemainMs() {
+        if (weatherRegion < 0) return 60_000;
+        return Math.max(10_000, weatherUntil - System.currentTimeMillis());
+    }
 
     private void insertAlert(Integer truckId, Integer taskId, String type, String level, String location) {
         try {

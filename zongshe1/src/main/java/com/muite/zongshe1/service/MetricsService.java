@@ -270,6 +270,9 @@ public class MetricsService {
         r.put("jamCount", jams);
         r.put("faultCount", faults);
         r.put("weatherCount", weathers);
+        Long weatherRefusals = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM alert_log WHERE type='天气拒驾'", Long.class);
+        r.put("weatherRefusals", weatherRefusals != null ? weatherRefusals : 0);
         r.put("restingDrivers", restingDrivers != null ? restingDrivers : 0);
         r.put("trucksInMaint", trucksInMaint != null ? trucksInMaint : 0);
         r.put("trucksInFault", trucksInFault != null ? trucksInFault : 0);

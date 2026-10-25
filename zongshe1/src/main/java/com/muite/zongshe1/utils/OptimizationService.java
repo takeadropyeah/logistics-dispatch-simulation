@@ -582,11 +582,17 @@ public class OptimizationService {
         private final Map<Integer, Integer> pairs;
         private final double planCost;
         private final double baselineCost;
+        private final double planCarbonKg;
 
-        public AssignResult(Map<Integer, Integer> pairs, double planCost, double baselineCost) {
+        public AssignResult(Map<Integer, Integer> pairs, double planCost, double baselineCost, double planCarbonKg) {
             this.pairs = pairs;
             this.planCost = planCost;
             this.baselineCost = baselineCost;
+            this.planCarbonKg = planCarbonKg;
+        }
+
+        public double getPlanCarbonKg() {
+            return planCarbonKg;
         }
 
         public Map<Integer, Integer> getPairs() {
@@ -616,6 +622,9 @@ public class OptimizationService {
     private static final double W_MISMATCH = 60.0;
     private static final double W_WAIT = 3.0;
     private static final double W_VALUE = 0.02;
+    /** 碳排显式目标：柴油 0.78 kg/km × 碳价 0.1 元/kg（独立于空驶权重的第 5 个优化目标） */
+    private static final double W_CARBON = 0.1;
+    private static final double CARBON_KG_PER_KM = 0.78;
     private static final double INFEASIBLE_PENALTY = 1e6;
 
     /**
@@ -672,6 +681,7 @@ public class OptimizationService {
                 f += W_EMPTY * emptyKm[i][j]
                         + W_MISMATCH * gap * gap
                         + W_WAIT * waitH[i]
+                        + W_CARBON * CARBON_KG_PER_KM * emptyKm[i][j]
                         - W_VALUE * value[i];
             }
             return f;
@@ -735,16 +745,18 @@ public class OptimizationService {
         }
 
         Map<Integer, Integer> pairs = new LinkedHashMap<>();
+        double carbonKg = 0;
         for (int i = 0; i < n; i++) {
             if (best[i] >= 0 && feasible[i][best[i]]) {
                 pairs.put(ts.get(i).getId(), vs.get(best[i]).getId());
+                carbonKg += emptyKm[i][best[i]] * CARBON_KG_PER_KM;
             }
         }
-        log.info("全局多目标派单求解：任务{}×车{}，基线{}→优化{}（降幅{}%），迭代{}次",
+        log.info("全局多目标派单求解：任务{}×车{}，基线{}→优化{}（降幅{}%），预计空驶碳排{}kg，迭代{}次",
                 n, m, String.format("%.1f", baseCost), String.format("%.1f", bestCost),
                 String.format("%.1f", baseCost > 0 ? Math.max(0, (baseCost - bestCost) / baseCost * 100) : 0),
-                iterations);
-        return new AssignResult(pairs, bestCost, baseCost);
+                String.format("%.1f", carbonKg), iterations);
+        return new AssignResult(pairs, bestCost, baseCost, carbonKg);
     }
 
     private double[] parseLatLon(String s) {

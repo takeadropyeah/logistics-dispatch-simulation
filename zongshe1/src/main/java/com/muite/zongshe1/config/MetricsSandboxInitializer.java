@@ -80,6 +80,9 @@ public class MetricsSandboxInitializer implements CommandLineRunner {
                     "algorithm VARCHAR(32)," +
                     "create_time DATETIME DEFAULT CURRENT_TIMESTAMP" +
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            try {
+                jdbcTemplate.execute("ALTER TABLE dispatch_batch_log ADD COLUMN carbon_kg DOUBLE");
+            } catch (Exception ignored) { }
 
             // task 表补时间戳与里程列（响应时间 / 空驶里程指标的口径基础）
             try { jdbcTemplate.execute("ALTER TABLE task ADD COLUMN create_time DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (Exception ignored) { }

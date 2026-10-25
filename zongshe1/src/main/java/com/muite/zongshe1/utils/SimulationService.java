@@ -65,6 +65,10 @@ public class SimulationService {
     @Autowired
     private JdbcTemplate metricsJdbcTemplate;
 
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private DriverBehaviorService driverBehaviorService;
+
     /** 最近一轮派单求解耗时（毫秒），供指标体系（A2 算法效率）读取 */
     private volatile long lastAssignCostMs = 0;
 
@@ -82,6 +86,12 @@ public class SimulationService {
      */
     private boolean driverRejects(Truck truck, Task task) {
         try {
+            // 恶劣天气拒驾（第6种行为状态）：任务起终点位于天气区域内时，候选司机大概率拒驾至天气结束
+            boolean weatherRefuse = false;
+            try {
+                weatherRefuse = driverBehaviorService.isWeatherRefusalNeeded(task.getStart());
+            } catch (Exception ignored) { }
+
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                     "SELECT id, license_type FROM driver WHERE status='空闲' AND truck_id IS NULL LIMIT 1");
             if (rows.isEmpty()) {
@@ -89,23 +99,37 @@ public class SimulationService {
             }
             Integer driverId = ((Number) rows.get(0).get("id")).intValue();
             String license = String.valueOf(rows.get(0).get("license_type"));
-            double rate = "A2".equals(license) ? 0.08 : 0.15;
+            double rate;
+            String newState;
+            long cooldownMs;
+            String alertType;
+            if (weatherRefuse) {
+                rate = 0.6;
+                newState = "天气拒驾";
+                cooldownMs = Math.max(10_000, driverBehaviorService.getWeatherRemainMs() + 1_000);
+                alertType = "天气拒驾";
+            } else {
+                rate = "A2".equals(license) ? 0.08 : 0.15;
+                newState = "拒单冷却";
+                cooldownMs = 9000;
+                alertType = "拒单";
+            }
             if (random.nextDouble() >= rate) {
                 return false;
             }
-            driverRejectCooldown.put(driverId, System.currentTimeMillis() + 9000);
-            jdbcTemplate.update("UPDATE driver SET status='拒单冷却' WHERE id=?", driverId);
+            driverRejectCooldown.put(driverId, System.currentTimeMillis() + cooldownMs);
+            jdbcTemplate.update("UPDATE driver SET status=? WHERE id=?", newState, driverId);
             AlertLog alertLog = new AlertLog();
             alertLog.setTruckId(truck.getId());
             alertLog.setTaskId(task.getId());
-            alertLog.setType("拒单");
+            alertLog.setType(alertType);
             alertLog.setLevel("一般");
             alertLog.setLocation(truck.getLocation());
             alertLog.setCreateTime(new Date());
             alertLog.setIsHandled(false);
             alertLogMapper.insert(alertLog);
             broadcastTruckEvent(truck, "DRIVER_REJECT", null);
-            log.info("司机行为：司机{} 拒单（概率{}），车辆{} 本轮跳过任务{}", driverId, rate, truck.getId(), task.getId());
+            log.info("司机行为：司机{} {}（概率{}），车辆{} 本轮跳过任务{}", driverId, newState, rate, truck.getId(), task.getId());
             return true;
         } catch (Exception e) {
             log.warn("拒单判定失败: {}", e.getMessage());
@@ -377,11 +401,11 @@ public class SimulationService {
 
             log.info("开始任务分配：待分配任务={}, 空闲车辆={}", unassignedTasks.size(), idleTrucks.size());
 
-            // 司机行为状态：拒单冷却期满的司机恢复空闲（冷却期间不参与派单绑定）
+            // 司机行为状态：拒单冷却/天气拒驾期满的司机恢复空闲（冷却期间不参与派单绑定）
             driverRejectCooldown.entrySet().removeIf(e -> {
                 if (System.currentTimeMillis() >= e.getValue()) {
                     try {
-                        jdbcTemplate.update("UPDATE driver SET status='空闲' WHERE id=? AND status='拒单冷却'", e.getKey());
+                        jdbcTemplate.update("UPDATE driver SET status='空闲' WHERE id=? AND status IN ('拒单冷却','天气拒驾')", e.getKey());
                     } catch (Exception ignored) { }
                     return true;
                 }
@@ -461,10 +485,11 @@ public class SimulationService {
             }
 
             try {
-                jdbcTemplate.update("INSERT INTO dispatch_batch_log(task_count, truck_count, greedy_cost, optimized_cost, improvement_pct, algorithm) " +
-                                "VALUES (?,?,?,?,?,?)",
+                jdbcTemplate.update("INSERT INTO dispatch_batch_log(task_count, truck_count, greedy_cost, optimized_cost, improvement_pct, algorithm, carbon_kg) " +
+                                "VALUES (?,?,?,?,?,?,?)",
                         unassignedTasks.size(), idleTrucks.size(),
-                        result.getBaselineCost(), result.getPlanCost(), result.improvementPct(), "MO-SA");
+                        result.getBaselineCost(), result.getPlanCost(), result.improvementPct(), "MO-SA",
+                        result.getPlanCarbonKg());
             } catch (Exception ignored) { }
 
             log.info("全局优化派单：任务{}×车{}，先到先得基线成本{}，多目标优化{}，降幅{}%，实际分配{}单",
