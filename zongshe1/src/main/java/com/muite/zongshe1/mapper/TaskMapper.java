@@ -59,7 +59,7 @@ public interface TaskMapper {
      * 统计未完成的任务数量
      * @return 数量
      */
-    @Select("SELECT COUNT(*) FROM task WHERE status != '已完成'")
+    @Select("SELECT COUNT(*) FROM task WHERE status NOT IN ('已完成','已取消')")
     int countIncompleteTasks();
 
     /**

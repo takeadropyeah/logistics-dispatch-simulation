@@ -84,6 +84,16 @@ public class MetricsSandboxInitializer implements CommandLineRunner {
                 jdbcTemplate.execute("ALTER TABLE dispatch_batch_log ADD COLUMN carbon_kg DOUBLE");
             } catch (Exception ignored) { }
 
+            // 6. 孤儿任务清理：多次重启遗留的"运输中但卡车已不在"任务重新放回待分配池，
+            //    否则它们永久卡在池外并污染生成器的任务计数
+            try {
+                int orphans = jdbcTemplate.update(
+                        "UPDATE task SET status='待分配' WHERE status='运输中' AND truck_id IS NULL");
+                if (orphans > 0) {
+                    log.info("已将 {} 个孤儿任务（运输中但无车辆）放回待分配池", orphans);
+                }
+            } catch (Exception ignored) { }
+
             // task 表补时间戳与里程列（响应时间 / 空驶里程指标的口径基础）
             try { jdbcTemplate.execute("ALTER TABLE task ADD COLUMN create_time DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (Exception ignored) { }
             try { jdbcTemplate.execute("ALTER TABLE task ADD COLUMN assign_time DATETIME"); } catch (Exception ignored) { }
