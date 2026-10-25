@@ -109,6 +109,32 @@ public class PoiCrawler {
         }
     }
 
+    /**
+     * 手动重建多城市POI数据集（阶段III：多城市任务空间多样性）。
+     * 清空 poi 表后按内置 11 城列表逐城爬取；
+     * 任务起终点存的是坐标而非 POI 主键，清空 poi 不影响在途任务。
+     *
+     * @return 概要：状态、POI 总数、覆盖城市数
+     */
+    public java.util.Map<String, Object> rebuildMultiCity() {
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        try {
+            jdbcTemplate.execute("TRUNCATE TABLE poi");
+            crawlMultiCityData();
+            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM poi", Integer.class);
+            out.put("status", "success");
+            out.put("poiCount", count);
+            out.put("cities", TARGET_CITIES.length);
+            out.put("citiesList", String.join(",", TARGET_CITIES));
+            log.info("多城市POI重建完成：{} 条 POI，覆盖 {} 城", count, TARGET_CITIES.length);
+        } catch (Exception e) {
+            out.put("status", "error");
+            out.put("message", e.getMessage());
+            log.error("多城市POI重建失败", e);
+        }
+        return out;
+    }
+
     public void getData() {
         List<Point> allPois = new ArrayList<>();
 

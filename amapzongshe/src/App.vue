@@ -254,6 +254,10 @@ function handleTruckEvent(event) {
       simulationSpeed
     };
   }
+  // 实时事件流：可播报的事件即时插播（轮询会用数据库真值刷新）
+  if (EV_LABELS[eventType]) {
+    pushLocalEvent(EV_LABELS[eventType], truckId, location);
+  }
 
   switch (eventType) {
     case 'TASK_ASSIGNED':
@@ -1594,11 +1598,63 @@ async function fetchSideMetrics() {
 }
 onMounted(() => {
   fetchSideMetrics();
-  sideMetricsTimer = setInterval(fetchSideMetrics, 5000);
+  fetchRecentAlerts();
+  sideMetricsTimer = setInterval(() => {
+    fetchSideMetrics();
+    fetchRecentAlerts();
+  }, 5000);
 });
 onUnmounted(() => {
   if (sideMetricsTimer) clearInterval(sideMetricsTimer);
 });
+
+// ===== 实时事件流面板 =====
+const showEventFeed = ref(true);
+const eventFeed = ref([]);
+function eventCls(type) {
+  const t = String(type || "");
+  if (t.includes("拥堵")) return "jam";
+  if (t.includes("故障")) return "fault";
+  if (t.includes("天气")) return "weather";
+  if (t.includes("缺货")) return "stock";
+  if (t.includes("拒")) return "reject";
+  if (t.includes("疲劳") || t.includes("休息")) return "rest";
+  if (t.includes("维保") || t.includes("保养")) return "maint";
+  return "misc";
+}
+async function fetchRecentAlerts() {
+  try {
+    const res = await fetch(`${API_CONFIG.baseUrl}/metrics/recent-alerts?limit=30`);
+    if (!res.ok) return;
+    const json = await res.json();
+    eventFeed.value = (json.alerts || []).map(a => ({
+      time: a.time,
+      type: a.type,
+      location: a.location,
+      truckId: a.truck_id,
+      cls: eventCls(a.type),
+    }));
+  } catch (e) { /* 静默 */ }
+}
+function pushLocalEvent(label, truckId, location) {
+  const d = new Date();
+  eventFeed.value.unshift({
+    time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`,
+    type: label,
+    location,
+    truckId,
+    cls: eventCls(label),
+  });
+  if (eventFeed.value.length > 40) eventFeed.value.length = 40;
+}
+// WebSocket 事件 → 事件流实时插播（5 秒轮询会用数据库真值刷新覆盖）
+const EV_LABELS = {
+  TRAFFIC_JAM: "交通拥堵",
+  VEHICLE_FAULT: "车辆故障",
+  DRIVER_REST: "司机疲劳休息",
+  DRIVER_REJECT: "司机拒单",
+  MAINT_START: "车辆保养",
+};
 
 // ===== 车辆状态统计（面板与侧边栏顶部的彩色计数） =====
 const STATUS_CLS = {
@@ -1747,6 +1803,7 @@ onUnmounted(() => {
         <button class="chip" :class="{ on: showRoutes }" @click="toggleRoutes" title="显示/隐藏路线">🛣️ 路线</button>
         <button class="chip" :class="{ on: showSidebar }" @click="showSidebar = !showSidebar" title="显示/隐藏车辆列表">🚚 列表</button>
         <button class="chip" @click="fitAllVehicles" title="缩放至显示全部车辆">🎯 总览</button>
+        <button class="chip" :class="{ on: showEventFeed }" @click="showEventFeed = !showEventFeed" title="实时事件流">🔔 事件</button>
       </div>
 
       <!-- 仿真控制 -->
@@ -1780,6 +1837,23 @@ onUnmounted(() => {
     <!-- 跟随模式提示条 -->
     <div v-if="followVehicleLabel" class="follow-chip" @click="followVehicleId = null; followVehicleLabel = ''">
       🎯 正在跟随 {{ followVehicleLabel }} · 点击退出跟随
+    </div>
+
+    <!-- 实时事件流面板 -->
+    <div class="event-feed" :class="{ 'feed-wide': !showSidebar }" v-if="showEventFeed">
+      <div class="ef-header">
+        <span>🔔 实时事件流</span>
+        <span class="ef-close" @click="showEventFeed = false">×</span>
+      </div>
+      <div class="ef-list">
+        <div v-for="(ev, idx) in eventFeed" :key="idx" class="ef-item">
+          <span class="ef-badge" :class="'ev-' + ev.cls">{{ ev.type }}</span>
+          <span class="ef-time">{{ ev.time }}</span>
+          <span class="ef-loc" :title="ev.location">{{ ev.location || '—' }}</span>
+          <span class="ef-truck" v-if="ev.truckId">🚚{{ ev.truckId }}</span>
+        </div>
+        <div v-if="!eventFeed.length" class="no-data">暂无事件</div>
+      </div>
     </div>
 
     <!-- 车辆信息侧边栏 -->
@@ -2267,7 +2341,7 @@ onUnmounted(() => {
 .dot-jam { background: #f87171; }
 .dot-other { background: #94a3b8; }
 
-.layer-chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.layer-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .chip {
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(148, 163, 184, 0.08);
@@ -2398,6 +2472,53 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .follow-chip:hover { background: rgba(15, 23, 42, 0.96); }
+
+/* ================= 实时事件流面板 ================= */
+.event-feed {
+  position: absolute;
+  bottom: 70px;
+  left: 356px;
+  right: 338px;
+  max-height: 240px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  z-index: 1000;
+  color: #e2e8f0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.4);
+}
+.event-feed.feed-wide { right: 18px; }
+.ef-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; font-size: 12px; font-weight: 600; color: #7dd3fc;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+.ef-close { cursor: pointer; color: #94a3b8; font-size: 18px; padding: 0 4px; line-height: 1; }
+.ef-close:hover { color: #f87171; }
+.ef-list { overflow-y: auto; padding: 4px 10px 8px; }
+.ef-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 4px; font-size: 11.5px; color: #cbd5e1;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.1);
+}
+.ef-item:last-child { border-bottom: none; }
+.ef-badge { flex: none; font-size: 10px; padding: 1px 7px; border-radius: 99px; font-weight: 600; }
+.ev-jam { background: #fee2e2; color: #b91c1c; }
+.ev-fault { background: #fecaca; color: #7f1d1d; }
+.ev-weather { background: #dbeafe; color: #1d4ed8; }
+.ev-stock { background: #ffedd5; color: #c2410c; }
+.ev-reject { background: #ede9fe; color: #6d28d9; }
+.ev-rest { background: #ccfbf1; color: #0f766e; }
+.ev-maint { background: #fef3c7; color: #b45309; }
+.ev-misc { background: #f1f5f9; color: #475569; }
+.ef-time { flex: none; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.ef-loc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #94a3b8; }
+.ef-truck { flex: none; color: #7dd3fc; }
 
 /* ================= 顶部系统栏 ================= */
 .top-header {

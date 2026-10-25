@@ -17,6 +17,23 @@ public class MetricsController {
     @Autowired
     private MetricsService metricsService;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Operation(summary = "最近事件流", description = "返回最近的告警/随机事件（大屏事件流面板数据源）")
+    @GetMapping("/recent-alerts")
+    public Map<String, Object> recentAlerts(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "40") int limit) {
+        int n = Math.min(Math.max(limit, 1), 100);
+        java.util.List<Map<String, Object>> alerts = jdbcTemplate.queryForList(
+                "SELECT type, level, location, truck_id, task_id, " +
+                        "DATE_FORMAT(create_time, '%H:%i:%s') AS time " +
+                        "FROM alert_log ORDER BY id DESC LIMIT " + n);
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("alerts", alerts);
+        out.put("serverTime", System.currentTimeMillis());
+        return out;
+    }
+
     @Operation(summary = "八维指标总览", description = "实时计算 M/U/T/A/C/R/F/G 八维指标")
     @GetMapping("/overview")
     public Map<String, Object> overview() {

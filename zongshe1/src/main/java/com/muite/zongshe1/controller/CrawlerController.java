@@ -52,4 +52,18 @@ public class CrawlerController {
             return "爬取失败：" + e.getMessage();
         }
     }
+
+    @GetMapping("/crawl/multi-city")
+    @Operation(summary = "重建多城市POI数据集", description = "清空 poi 表后按内置 11 城列表逐城爬取（每城 5 页）；任务起终点为坐标，不影响在途任务。跨城任务由此产生。")
+    public java.util.Map<String, Object> crawlMultiCity(
+            @Parameter(description = "是否清空现有 POI（默认 true）")
+            @RequestParam(defaultValue = "true") boolean clear) {
+        if (!clear) {
+            java.util.Map<String, Object> skip = new java.util.LinkedHashMap<>();
+            skip.put("status", "skipped");
+            skip.put("message", "clear=false 时跳过重建");
+            return skip;
+        }
+        return poiCrawler.rebuildMultiCity();
+    }
 }

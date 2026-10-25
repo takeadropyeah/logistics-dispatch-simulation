@@ -1077,6 +1077,24 @@ public class SimulationService {
     private final Map<Integer, Double> truckTotalDistance = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<Integer, List<TaskRoutePoint>> truckRouteCache = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 位置批量落库缓冲：移动中的位置每 2 秒合并刷新一次（状态变更仍即时落库；前端有本地插值，视觉无感） */
+    private final Map<Integer, Object[]> pendingLocationFlush = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Scheduled(fixedRate = 2000)
+    public void flushTruckLocations() {
+        if (pendingLocationFlush.isEmpty()) {
+            return;
+        }
+        List<Object[]> args = new ArrayList<>();
+        pendingLocationFlush.forEach((id, v) -> args.add(new Object[]{v[0], v[1], id}));
+        pendingLocationFlush.clear();
+        try {
+            jdbcTemplate.batchUpdate("UPDATE truck SET location=?, current_point_sequence=? WHERE id=?", args);
+        } catch (Exception e) {
+            log.warn("位置批量落库失败: {}", e.getMessage());
+        }
+    }
+
     @Scheduled(fixedRate = 200)
     public void simulateMovement() {
         if (!isSimulationRunning) {
@@ -1318,12 +1336,13 @@ public class SimulationService {
                     } else {
                         String interpolatedLocation = interpolatePosition(routePoints, progress);
                         truck.setLocation(interpolatedLocation);
-                        
+
                         int currentIndex = (int) (progress * routePoints.size());
                         truck.setCurrentPointSequence(currentIndex);
-                        
-                        truckMapper.updateByPrimaryKey(truck);
-                        
+
+                        // 位置批量落库：不再逐 tick 全量写行，每 2 秒合并刷新一次
+                        pendingLocationFlush.put(truckId, new Object[]{interpolatedLocation, currentIndex});
+
                         if (currentTask != null && currentTask.getGoodsId() != null) {
                             checkAndRecordGoodsLoss(currentTask.getGoodsId(), task, truck);
                         }
@@ -1391,12 +1410,13 @@ public class SimulationService {
                     } else {
                         String interpolatedLocation = interpolatePosition(routePoints, progress);
                         truck.setLocation(interpolatedLocation);
-                        
+
                         // 计算当前路径点索引并保存（取货路径使用负数索引）
                         int currentIndex = (int) (progress * routePoints.size());
                         truck.setCurrentPointSequence(-currentIndex);
-                        
-                        truckMapper.updateByPrimaryKey(truck);
+
+                        // 位置批量落库：不再逐 tick 全量写行，每 2 秒合并刷新一次
+                        pendingLocationFlush.put(truckId, new Object[]{interpolatedLocation, -currentIndex});
                         
                         broadcastTruckEvent(truck, "POSITION_UPDATE", null);
                     }
