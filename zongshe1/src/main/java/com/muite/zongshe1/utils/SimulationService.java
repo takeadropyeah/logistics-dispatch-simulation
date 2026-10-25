@@ -77,7 +77,7 @@ public class SimulationService {
 
     /**
      * 司机行为状态：按数学概率拒单。候选司机为第一名空闲未绑车的司机；
-     * 基准概率 8%，A2 驾照修正系数 0.5（更稳定）；拒单后写告警日志
+     * 基准概率 15%，A2 驾照修正系数 0.5（更稳定）；拒单后写告警日志
      * （公平性指标 F2 拒单数的数据源），司机进入 9 秒拒单冷却（冷却期间不参与派单绑定）。
      */
     private boolean driverRejects(Truck truck, Task task) {
@@ -89,7 +89,7 @@ public class SimulationService {
             }
             Integer driverId = ((Number) rows.get(0).get("id")).intValue();
             String license = String.valueOf(rows.get(0).get("license_type"));
-            double rate = "A2".equals(license) ? 0.04 : 0.08;
+            double rate = "A2".equals(license) ? 0.08 : 0.15;
             if (random.nextDouble() >= rate) {
                 return false;
             }
@@ -377,6 +377,17 @@ public class SimulationService {
 
             log.info("开始任务分配：待分配任务={}, 空闲车辆={}", unassignedTasks.size(), idleTrucks.size());
 
+            // 司机行为状态：拒单冷却期满的司机恢复空闲（冷却期间不参与派单绑定）
+            driverRejectCooldown.entrySet().removeIf(e -> {
+                if (System.currentTimeMillis() >= e.getValue()) {
+                    try {
+                        jdbcTemplate.update("UPDATE driver SET status='空闲' WHERE id=? AND status='拒单冷却'", e.getKey());
+                    } catch (Exception ignored) { }
+                    return true;
+                }
+                return false;
+            });
+
             int assignedCount = 0;
             Set<Integer> assignedTaskIds = new HashSet<>();
             Set<Integer> usedTruckIds = new HashSet<>();
@@ -412,11 +423,17 @@ public class SimulationService {
                         usedTruckIds.add(truck.getId());
                         // 记录匹配质量（以条件最优车为基准答案），供匹配精准度指标使用
                         logMatchQuality(matchedTask, truck, idleTrucks, usedTruckIds);
-                        // 司机行为状态：为本次运输绑定一名空闲司机（空闲 → 驾驶中）
+                        // 司机行为状态：为本次运输绑定一名空闲司机（空闲 → 驾驶中）；
+                        // 先检查该车辆是否已有"驾驶中"司机，避免一车多绑定的累积
                         try {
-                            jdbcTemplate.update(
-                                    "UPDATE driver SET status='驾驶中', truck_id=? WHERE status='空闲' AND truck_id IS NULL LIMIT 1",
-                                    truck.getId());
+                            Integer bound = jdbcTemplate.queryForObject(
+                                    "SELECT COUNT(*) FROM driver WHERE truck_id=? AND status='驾驶中'",
+                                    Integer.class, truck.getId());
+                            if (bound == null || bound == 0) {
+                                jdbcTemplate.update(
+                                        "UPDATE driver SET status='驾驶中', truck_id=? WHERE status='空闲' AND truck_id IS NULL LIMIT 1",
+                                        truck.getId());
+                            }
                         } catch (Exception e) {
                             log.warn("绑定驾驶司机失败: {}", e.getMessage());
                         }

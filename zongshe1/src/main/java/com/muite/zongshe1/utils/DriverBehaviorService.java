@@ -107,8 +107,8 @@ public class DriverBehaviorService {
                     triggerRest(truck, now);
                     continue;
                 }
-                // 车辆故障：0.05%/tick
-                if (random.nextDouble() < 0.0005) {
+                // 车辆故障：0.01%/tick（约每小时 5-10 次，避免停机时间占比过高）
+                if (random.nextDouble() < 0.0001) {
                     triggerFault(truck, now);
                 }
             } else if (TruckStatusConstant.IDLE.equals(status)) {
@@ -254,11 +254,17 @@ public class DriverBehaviorService {
             log.warn("司机休假检查失败: {}", e.getMessage());
         }
 
-        // 状态对账：车辆已空闲但司机仍标记驾驶中的，解除绑定（修复既有数据不一致）
+        // 状态对账（不变式校验）：司机绑定的车辆若已空闲/不存在/无任务，则解绑司机。
+        // 旧数据里存在大量失效绑定（truck_id 指向早已不工作的车辆），此规则能自动清退，
+        // 使"派单时绑定 / 拒单候选"始终能找到真正空闲（truck_id IS NULL）的司机。
         try {
-            jdbcTemplate.update("UPDATE driver d JOIN truck t ON d.truck_id = t.id " +
-                    "SET d.status='空闲', d.truck_id=NULL WHERE t.status='空闲' AND d.status='驾驶中'");
-        } catch (Exception ignored) { }
+            jdbcTemplate.update("UPDATE driver d LEFT JOIN truck t ON d.truck_id = t.id " +
+                    "SET d.status='空闲', d.truck_id=NULL " +
+                    "WHERE d.truck_id IS NOT NULL AND d.status IN ('空闲','驾驶中') " +
+                    "AND (t.id IS NULL OR t.status IS NULL OR t.status IN ('空闲','保养') OR t.task_id IS NULL AND t.status NOT IN ('故障'))");
+        } catch (Exception e) {
+            log.warn("司机状态对账失败: {}", e.getMessage());
+        }
     }
 
     private void vacationRecover(long now) {
