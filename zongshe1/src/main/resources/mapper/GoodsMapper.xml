@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.GoodsMapper">
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.Goods">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="weight" property="weight"/>
+        <result column="volume" property="volume"/>
+        <result column="value" property="value"/>
+        <result column="status" property="status"/>
+        <result column="priority" property="priority"/>
+        <result column="sender_id" property="senderId"/>
+        <result column="receiver_id" property="receiverId"/>
+        <result column="origin_location" property="originLocation"/>
+        <result column="dest_location" property="destLocation"/>
+        <result column="distance" property="distance"/>
+        <result column="task_id" property="taskId"/>
+        <result column="create_time" property="createTime"/>
+        <result column="assign_time" property="assignTime"/>
+        <result column="load_time" property="loadTime"/>
+        <result column="deliver_time" property="deliverTime"/>
+        <result column="complete_time" property="completeTime"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, name, type, weight, volume, value, status, priority, sender_id, receiver_id,
+        origin_location, dest_location, distance, task_id, create_time, assign_time,
+        load_time, deliver_time, complete_time
+    </sql>
+
+    <select id="selectByPrimaryKey" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where id = #{id}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        order by create_time desc
+    </select>
+
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where status = #{status}
+        order by create_time desc
+    </select>
+
+    <select id="selectByType" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where type = #{type}
+        order by create_time desc
+    </select>
+
+    <select id="selectBySenderId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where sender_id = #{senderId}
+        order by create_time desc
+    </select>
+
+    <select id="selectByReceiverId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where receiver_id = #{receiverId}
+        order by create_time desc
+    </select>
+
+    <select id="selectPendingGoods" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where status = '待分配'
+        order by priority desc, create_time asc
+    </select>
+
+    <select id="selectWaitingGoods" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods
+        where status in ('待运输', '运输中')
+        and (assign_time is null or load_time is null)
+        order by create_time asc
+    </select>
+
+    <delete id="deleteByPrimaryKey">
+        delete from goods
+        where id = #{id}
+    </delete>
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.Goods" useGeneratedKeys="true" keyProperty="id">
+        insert into goods (name, type, weight, volume, value, status, priority,
+        sender_id, receiver_id, origin_location, dest_location, distance, task_id,
+        create_time, assign_time, load_time, deliver_time, complete_time)
+        values (#{name}, #{type}, #{weight}, #{volume}, #{value}, #{status}, #{priority},
+        #{senderId}, #{receiverId}, #{originLocation}, #{destLocation}, #{distance}, #{taskId},
+        #{createTime}, #{assignTime}, #{loadTime}, #{deliverTime}, #{completeTime})
+    </insert>
+
+    <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.Goods" useGeneratedKeys="true" keyProperty="id">
+        insert into goods
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null">name,</if>
+            <if test="type != null">type,</if>
+            <if test="weight != null">weight,</if>
+            <if test="volume != null">volume,</if>
+            <if test="value != null">value,</if>
+            <if test="status != null">status,</if>
+            <if test="priority != null">priority,</if>
+            <if test="senderId != null">sender_id,</if>
+            <if test="receiverId != null">receiver_id,</if>
+            <if test="originLocation != null">origin_location,</if>
+            <if test="destLocation != null">dest_location,</if>
+            <if test="distance != null">distance,</if>
+            <if test="taskId != null">task_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="assignTime != null">assign_time,</if>
+            <if test="loadTime != null">load_time,</if>
+            <if test="deliverTime != null">deliver_time,</if>
+            <if test="completeTime != null">complete_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="name != null">#{name},</if>
+            <if test="type != null">#{type},</if>
+            <if test="weight != null">#{weight},</if>
+            <if test="volume != null">#{volume},</if>
+            <if test="value != null">#{value},</if>
+            <if test="status != null">#{status},</if>
+            <if test="priority != null">#{priority},</if>
+            <if test="senderId != null">#{senderId},</if>
+            <if test="receiverId != null">#{receiverId},</if>
+            <if test="originLocation != null">#{originLocation},</if>
+            <if test="destLocation != null">#{destLocation},</if>
+            <if test="distance != null">#{distance},</if>
+            <if test="taskId != null">#{taskId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="assignTime != null">#{assignTime},</if>
+            <if test="loadTime != null">#{loadTime},</if>
+            <if test="deliverTime != null">#{deliverTime},</if>
+            <if test="completeTime != null">#{completeTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.Goods">
+        update goods
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="weight != null">weight = #{weight},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="value != null">value = #{value},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="senderId != null">sender_id = #{senderId},</if>
+            <if test="receiverId != null">receiver_id = #{receiverId},</if>
+            <if test="originLocation != null">origin_location = #{originLocation},</if>
+            <if test="destLocation != null">dest_location = #{destLocation},</if>
+            <if test="distance != null">distance = #{distance},</if>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="assignTime != null">assign_time = #{assignTime},</if>
+            <if test="loadTime != null">load_time = #{loadTime},</if>
+            <if test="deliverTime != null">deliver_time = #{deliverTime},</if>
+            <if test="completeTime != null">complete_time = #{completeTime},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <update id="updateByPrimaryKey" parameterType="com.muite.zongshe1.entity.Goods">
+        update goods
+        set name = #{name},
+        type = #{type},
+        weight = #{weight},
+        volume = #{volume},
+        value = #{value},
+        status = #{status},
+        priority = #{priority},
+        sender_id = #{senderId},
+        receiver_id = #{receiverId},
+        origin_location = #{originLocation},
+        dest_location = #{destLocation},
+        distance = #{distance},
+        task_id = #{taskId},
+        create_time = #{createTime},
+        assign_time = #{assignTime},
+        load_time = #{loadTime},
+        deliver_time = #{deliverTime},
+        complete_time = #{completeTime}
+        where id = #{id}
+    </update>
+</mapper>

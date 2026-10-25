@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.PointMapper">
+
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.Point">
+            <result property="location" column="location" />
+            <result property="name" column="name" />
+            <result property="type" column="type" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        location,name,type
+    </sql>
+
+    <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List" />
+        from point
+        where 
+    </select>
+
+    <select id="selectByName" resultType="com.muite.zongshe1.entity.Point">
+        select name,location,type from poi where name=#{name}
+    </select>
+
+    <select id="selectAll" resultType="com.muite.zongshe1.entity.Point">
+        SELECT name, location, type
+        FROM poi
+    </select>
+
+
+
+
+    <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+        delete from point
+        where 
+    </delete>
+    <insert id="insert">
+        insert into point
+        ( location,name,type)
+        values (#{location},#{name},#{type})
+    </insert>
+    <insert id="insertSelective">
+        insert into point
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="location != null">location,</if>
+                <if test="name != null">name,</if>
+                <if test="type != null">type,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="location != null">#{location},</if>
+                <if test="name != null">#{name},</if>
+                <if test="type != null">#{type},</if>
+        </trim>
+    </insert>
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.Point">
+        update point
+        <set>
+                <if test="location != null">
+                    location = #{location},
+                </if>
+                <if test="name != null">
+                    name = #{name},
+                </if>
+                <if test="type != null">
+                    type = #{type},
+                </if>
+        </set>
+        where  
+    </update>
+    <update id="updateByPrimaryKey" parameterType="com.muite.zongshe1.entity.Point">
+        update point
+        set
+            location =  #{location},
+            name =  #{name},
+            type =  #{type}
+        where  
+    </update>
+</mapper>

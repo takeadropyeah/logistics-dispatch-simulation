@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.TaskRoutePointMapper">
+
+    <!-- 批量插入路径点 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO task_route_point (task_id, point_location, point_name, sequence)
+        VALUES
+        <foreach collection="list" item="point" separator=",">
+            (#{point.taskId}, #{point.pointLocation}, #{point.pointName}, #{point.sequence})
+        </foreach>
+    </insert>
+
+    <!-- 根据任务ID查询路径点（按顺序排序） -->
+    <select id="selectByTaskId" parameterType="java.lang.Integer" resultType="com.muite.zongshe1.entity.TaskRoutePoint">
+        SELECT id, task_id, point_location, point_name, sequence
+        FROM task_route_point
+        WHERE task_id = #{taskId}
+        ORDER BY sequence ASC
+    </select>
+
+    <!-- 根据任务ID删除路径点 -->
+    <delete id="deleteByTaskId" parameterType="java.lang.Integer">
+        DELETE FROM task_route_point
+        WHERE task_id = #{taskId}
+    </delete>
+
+    <!-- 删除已完成任务的路径点 -->
+    <delete id="deleteCompletedTaskRoutePoints">
+        DELETE trp FROM task_route_point trp
+        INNER JOIN task t ON trp.task_id = t.id
+        WHERE t.status = '已完成'
+    </delete>
+
+    <!-- 删除所有路径点 -->
+    <delete id="deleteAll">
+        DELETE FROM task_route_point
+    </delete>
+</mapper>

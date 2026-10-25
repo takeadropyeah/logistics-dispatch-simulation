@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.GoodsDemandMapper">
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.GoodsDemand">
+        <id column="id" property="id"/>
+        <result column="goods_id" property="goodsId"/>
+        <result column="demand_type" property="demandType"/>
+        <result column="demand_time" property="demandTime"/>
+        <result column="region" property="region"/>
+        <result column="urgency" property="urgency"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, goods_id, demand_type, demand_time, region, urgency, status
+    </sql>
+
+    <select id="selectByPrimaryKey" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_demand
+        where id = #{id}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_demand
+        order by demand_time desc
+    </select>
+
+    <select id="selectByGoodsId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_demand
+        where goods_id = #{goodsId}
+        order by demand_time desc
+    </select>
+
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_demand
+        where status = #{status}
+        order by demand_time desc
+    </select>
+
+    <delete id="deleteByPrimaryKey">
+        delete from goods_demand
+        where id = #{id}
+    </delete>
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.GoodsDemand" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_demand (goods_id, demand_type, demand_time, region, urgency, status)
+        values (#{goodsId}, #{demandType}, #{demandTime}, #{region}, #{urgency}, #{status})
+    </insert>
+
+    <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.GoodsDemand" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_demand
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">goods_id,</if>
+            <if test="demandType != null">demand_type,</if>
+            <if test="demandTime != null">demand_time,</if>
+            <if test="region != null">region,</if>
+            <if test="urgency != null">urgency,</if>
+            <if test="status != null">status,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">#{goodsId},</if>
+            <if test="demandType != null">#{demandType},</if>
+            <if test="demandTime != null">#{demandTime},</if>
+            <if test="region != null">#{region},</if>
+            <if test="urgency != null">#{urgency},</if>
+            <if test="status != null">#{status},</if>
+        </trim>
+    </insert>
+
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.GoodsDemand">
+        update goods_demand
+        <set>
+            <if test="goodsId != null">goods_id = #{goodsId},</if>
+            <if test="demandType != null">demand_type = #{demandType},</if>
+            <if test="demandTime != null">demand_time = #{demandTime},</if>
+            <if test="region != null">region = #{region},</if>
+            <if test="urgency != null">urgency = #{urgency},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        where id = #{id}
+    </update>
+</mapper>

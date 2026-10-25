@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.GoodsTransportMapper">
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.GoodsTransport">
+        <id column="id" property="id"/>
+        <result column="goods_id" property="goodsId"/>
+        <result column="task_id" property="taskId"/>
+        <result column="truck_id" property="truckId"/>
+        <result column="transport_type" property="transportType"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="actual_distance" property="actualDistance"/>
+        <result column="transport_region" property="transportRegion"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, goods_id, task_id, truck_id, transport_type, start_time, end_time, actual_distance, transport_region
+    </sql>
+
+    <select id="selectByPrimaryKey" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_transport
+        where id = #{id}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_transport
+        order by start_time desc
+    </select>
+
+    <select id="selectByGoodsId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_transport
+        where goods_id = #{goodsId}
+        order by start_time desc
+    </select>
+
+    <select id="selectByTaskId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_transport
+        where task_id = #{taskId}
+        order by start_time desc
+    </select>
+
+    <select id="selectByTruckId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_transport
+        where truck_id = #{truckId}
+        order by start_time desc
+    </select>
+
+    <delete id="deleteByPrimaryKey">
+        delete from goods_transport
+        where id = #{id}
+    </delete>
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.GoodsTransport" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_transport (goods_id, task_id, truck_id, transport_type, start_time, end_time, actual_distance, transport_region)
+        values (#{goodsId}, #{taskId}, #{truckId}, #{transportType}, #{startTime}, #{endTime}, #{actualDistance}, #{transportRegion})
+    </insert>
+
+    <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.GoodsTransport" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_transport
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">goods_id,</if>
+            <if test="taskId != null">task_id,</if>
+            <if test="truckId != null">truck_id,</if>
+            <if test="transportType != null">transport_type,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="actualDistance != null">actual_distance,</if>
+            <if test="transportRegion != null">transport_region,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">#{goodsId},</if>
+            <if test="taskId != null">#{taskId},</if>
+            <if test="truckId != null">#{truckId},</if>
+            <if test="transportType != null">#{transportType},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="actualDistance != null">#{actualDistance},</if>
+            <if test="transportRegion != null">#{transportRegion},</if>
+        </trim>
+    </insert>
+
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.GoodsTransport">
+        update goods_transport
+        <set>
+            <if test="goodsId != null">goods_id = #{goodsId},</if>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="truckId != null">truck_id = #{truckId},</if>
+            <if test="transportType != null">transport_type = #{transportType},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="actualDistance != null">actual_distance = #{actualDistance},</if>
+            <if test="transportRegion != null">transport_region = #{transportRegion},</if>
+        </set>
+        where id = #{id}
+    </update>
+</mapper>

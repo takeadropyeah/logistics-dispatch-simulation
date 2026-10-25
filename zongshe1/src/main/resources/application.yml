@@ -1,0 +1,34 @@
+# application.yml
+
+amap:
+  # 高德"Web服务"类型 key：到 https://lbs.amap.com 申请，或在 application-local.yml（不入库）里配置
+  key: "YOUR_AMAP_WEB_KEY"
+
+poi:
+  crawler:
+    auto-run: false        # 是否启动时自动爬取
+    keywords: "仓库"
+    city: "北京"
+    max-pages: 5
+
+
+spring:
+  # 本地个性化配置（数据库密码等）：各自创建 application-local.yml 覆盖，不入库
+  config:
+    import: optional:classpath:application-local.yml
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/zongshe
+    username: root
+    password: "CHANGE_ME" # 在 application-local.yml（不入库）里配置真实密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  application:
+    name: zongshe1
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    root: info

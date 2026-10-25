@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.GoodsLossMapper">
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.GoodsLoss">
+        <id column="id" property="id"/>
+        <result column="goods_id" property="goodsId"/>
+        <result column="loss_type" property="lossType"/>
+        <result column="loss_weight" property="lossWeight"/>
+        <result column="loss_value" property="lossValue"/>
+        <result column="loss_time" property="lossTime"/>
+        <result column="factory_id" property="factoryId"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, goods_id, loss_type, loss_weight, loss_value, loss_time, factory_id
+    </sql>
+
+    <select id="selectByPrimaryKey" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_loss
+        where id = #{id}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_loss
+        order by loss_time desc
+    </select>
+
+    <select id="selectByGoodsId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_loss
+        where goods_id = #{goodsId}
+        order by loss_time desc
+    </select>
+
+    <select id="selectByFactoryId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_loss
+        where factory_id = #{factoryId}
+        order by loss_time desc
+    </select>
+
+    <delete id="deleteByPrimaryKey">
+        delete from goods_loss
+        where id = #{id}
+    </delete>
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.GoodsLoss" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_loss (goods_id, loss_type, loss_weight, loss_value, loss_time, factory_id)
+        values (#{goodsId}, #{lossType}, #{lossWeight}, #{lossValue}, #{lossTime}, #{factoryId})
+    </insert>
+
+    <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.GoodsLoss" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_loss
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">goods_id,</if>
+            <if test="lossType != null">loss_type,</if>
+            <if test="lossWeight != null">loss_weight,</if>
+            <if test="lossValue != null">loss_value,</if>
+            <if test="lossTime != null">loss_time,</if>
+            <if test="factoryId != null">factory_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">#{goodsId},</if>
+            <if test="lossType != null">#{lossType},</if>
+            <if test="lossWeight != null">#{lossWeight},</if>
+            <if test="lossValue != null">#{lossValue},</if>
+            <if test="lossTime != null">#{lossTime},</if>
+            <if test="factoryId != null">#{factoryId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.GoodsLoss">
+        update goods_loss
+        <set>
+            <if test="goodsId != null">goods_id = #{goodsId},</if>
+            <if test="lossType != null">loss_type = #{lossType},</if>
+            <if test="lossWeight != null">loss_weight = #{lossWeight},</if>
+            <if test="lossValue != null">loss_value = #{lossValue},</if>
+            <if test="lossTime != null">loss_time = #{lossTime},</if>
+            <if test="factoryId != null">factory_id = #{factoryId},</if>
+        </set>
+        where id = #{id}
+    </update>
+</mapper>

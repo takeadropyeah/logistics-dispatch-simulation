@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.AlertLogMapper">
+  <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.AlertLog">
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="truck_id" jdbcType="INTEGER" property="truckId" />
+    <result column="driver_id" jdbcType="INTEGER" property="driverId" />
+    <result column="task_id" jdbcType="INTEGER" property="taskId" />
+    <result column="type" jdbcType="VARCHAR" property="type" />
+    <result column="level" jdbcType="VARCHAR" property="level" />
+    <result column="location" jdbcType="VARCHAR" property="location" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="is_handled" jdbcType="BIT" property="isHandled" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, truck_id, driver_id, task_id, type, level, location, create_time, is_handled
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from alert_log
+    where id = #{id,jdbcType=INTEGER}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Integer">
+    delete from alert_log
+    where id = #{id,jdbcType=INTEGER}
+  </delete>
+  <insert id="insert" parameterType="com.muite.zongshe1.entity.AlertLog">
+    <selectKey keyProperty="id" order="AFTER" resultType="java.lang.Integer">
+      SELECT LAST_INSERT_ID()
+    </selectKey>
+    insert into alert_log (truck_id, driver_id, task_id, type, 
+      level, location, create_time, 
+      is_handled)
+    values (#{truckId,jdbcType=INTEGER}, #{driverId,jdbcType=INTEGER}, #{taskId,jdbcType=INTEGER}, #{type,jdbcType=VARCHAR}, 
+      #{level,jdbcType=VARCHAR}, #{location,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, 
+      #{isHandled,jdbcType=BIT})
+  </insert>
+  <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.AlertLog">
+    <selectKey keyProperty="id" order="AFTER" resultType="java.lang.Integer">
+      SELECT LAST_INSERT_ID()
+    </selectKey>
+    insert into alert_log
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="truckId != null">
+        truck_id,
+      </if>
+      <if test="driverId != null">
+        driver_id,
+      </if>
+      <if test="taskId != null">
+        task_id,
+      </if>
+      <if test="type != null">
+        type,
+      </if>
+      <if test="level != null">
+        level,
+      </if>
+      <if test="location != null">
+        location,
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="isHandled != null">
+        is_handled,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="truckId != null">
+        #{truckId,jdbcType=INTEGER},
+      </if>
+      <if test="driverId != null">
+        #{driverId,jdbcType=INTEGER},
+      </if>
+      <if test="taskId != null">
+        #{taskId,jdbcType=INTEGER},
+      </if>
+      <if test="type != null">
+        #{type,jdbcType=VARCHAR},
+      </if>
+      <if test="level != null">
+        #{level,jdbcType=VARCHAR},
+      </if>
+      <if test="location != null">
+        #{location,jdbcType=VARCHAR},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="isHandled != null">
+        #{isHandled,jdbcType=BIT},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.AlertLog">
+    update alert_log
+    <set>
+      <if test="truckId != null">
+        truck_id = #{truckId,jdbcType=INTEGER},
+      </if>
+      <if test="driverId != null">
+        driver_id = #{driverId,jdbcType=INTEGER},
+      </if>
+      <if test="taskId != null">
+        task_id = #{taskId,jdbcType=INTEGER},
+      </if>
+      <if test="type != null">
+        type = #{type,jdbcType=VARCHAR},
+      </if>
+      <if test="level != null">
+        level = #{level,jdbcType=VARCHAR},
+      </if>
+      <if test="location != null">
+        location = #{location,jdbcType=VARCHAR},
+      </if>
+      <if test="createTime != null">
+        create_time = #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="isHandled != null">
+        is_handled = #{isHandled,jdbcType=BIT},
+      </if>
+    </set>
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="com.muite.zongshe1.entity.AlertLog">
+    update alert_log
+    set truck_id = #{truckId,jdbcType=INTEGER},
+      task_id = #{taskId,jdbcType=INTEGER},
+      type = #{type,jdbcType=VARCHAR},
+      level = #{level,jdbcType=VARCHAR},
+      location = #{location,jdbcType=VARCHAR},
+      create_time = #{createTime,jdbcType=TIMESTAMP},
+      is_handled = #{isHandled,jdbcType=BIT}
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <select id="selectAll" resultMap="BaseResultMap">
+    select id, truck_id, task_id, type, level, location, create_time, is_handled
+    from alert_log
+  </select>
+</mapper>

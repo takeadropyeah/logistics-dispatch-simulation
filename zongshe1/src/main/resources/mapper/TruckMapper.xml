@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.TruckMapper">
+
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.Truck">
+            <id property="id" column="id" />
+            <result property="maxWeight" column="max_weight" />
+            <result property="maxVol" column="max_vol" />
+            <result property="status" column="status" />
+            <result property="type" column="type" />
+            <result property="location" column="location" />
+            <result property="taskId" column="task_id" />
+            <result property="currentPointSequence" column="current_point_sequence" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,max_weight,max_vol,status,type,location,task_id,current_point_sequence
+    </sql>
+
+    <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List" />
+        from truck
+        where  id = #{id} 
+    </select>
+    <select id="selectAll" resultType="com.muite.zongshe1.entity.Truck">
+        SELECT * from truck
+    </select>
+
+    <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+        delete from truck
+        where  id = #{id} 
+    </delete>
+    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.muite.zongshe1.entity.Truck" useGeneratedKeys="true">
+        insert into truck
+        ( id,max_weight,max_vol,status,type,location)
+        values (#{id},#{maxWeight},#{maxVol},#{status},#{type},#{location})
+    </insert>
+    <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.muite.zongshe1.entity.Truck" useGeneratedKeys="true">
+        insert into truck
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="id != null">id,</if>
+                <if test="maxWeight != null">max_weight,</if>
+                <if test="maxVol != null">max_vol,</if>
+                <if test="status != null">status,</if>
+                <if test="type != null">type,</if>
+                <if test="location != null">location,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="id != null">#{id},</if>
+                <if test="maxWeight != null">#{maxWeight},</if>
+                <if test="maxVol != null">#{maxVol},</if>
+                <if test="status != null">#{status},</if>
+                <if test="type != null">#{type},</if>
+                <if test="location != null">#{location},</if>
+        </trim>
+    </insert>
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.Truck">
+        update truck
+        <set>
+                <if test="maxWeight != null">
+                    max_weight = #{maxWeight},
+                </if>
+                <if test="maxVol != null">
+                    max_vol = #{maxVol},
+                </if>
+                <if test="status != null">
+                    status = #{status},
+                </if>
+                <if test="type != null">
+                    type = #{type},
+                </if>
+                <if test="location != null">
+                    location = #{location},
+                </if>
+                <if test="taskId != null">
+                    task_id = #{taskId},
+                </if>
+                <if test="currentPointSequence != null">
+                    current_point_sequence = #{currentPointSequence},
+                </if>
+        </set>
+        where   id = #{id} 
+    </update>
+    <update id="updateByPrimaryKey" parameterType="com.muite.zongshe1.entity.Truck">
+        update truck
+        set 
+            max_weight =  #{maxWeight},
+            max_vol =  #{maxVol},
+            status =  #{status},
+            type =  #{type},
+            location =  #{location},
+            task_id = #{taskId},
+            current_point_sequence = #{currentPointSequence}
+        where   id = #{id} 
+    </update>
+</mapper>

@@ -1,0 +1,577 @@
+package com.muite.zongshe1.utils;
+
+import com.muite.zongshe1.entity.Goods;
+import com.muite.zongshe1.entity.Task;
+import com.muite.zongshe1.entity.Truck;
+import com.muite.zongshe1.mapper.TaskMapper;
+import com.muite.zongshe1.mapper.TruckMapper;
+import com.muite.zongshe1.service.GoodsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 优化算法服务
+ * 包含：
+ * 1. 模拟退火算法（类似吃鸡缩圈淘汰算法）
+ * 2. 遗传算法（用于路径优化）
+ */
+@Service
+public class OptimizationService {
+
+    private static final Logger log = LoggerFactory.getLogger(OptimizationService.class);
+
+    @Autowired
+    private TruckMapper truckMapper;
+
+    @Autowired
+    private TaskMapper taskMapper;
+
+    @Autowired
+    private GoodsService goodsService;
+
+    @Autowired
+    private CostService costService;
+
+    // ==================== 模拟退火算法（类似吃鸡缩圈淘汰算法）====================
+
+    /**
+     * 模拟退火算法优化任务分配
+     * 类似吃鸡缩圈机制：随着迭代进行，搜索范围逐渐缩小，温度降低
+     *
+     * @param trucks 车辆列表
+     * @param tasks  任务列表
+     * @return 优化后的任务分配方案
+     */
+    public Map<Truck, List<Task>> simulatedAnnealingOptimization(List<Truck> trucks, List<Task> tasks) {
+        // 初始化当前解：随机分配任务
+        Map<Truck, List<Task>> currentSolution = randomAssignment(trucks, tasks);
+        Map<Truck, List<Task>> bestSolution = deepCopySolution(currentSolution);
+
+        // 模拟退火参数
+        double temperature = 1000.0; // 初始温度
+        double coolingRate = 0.95;   // 冷却速率
+        double minTemperature = 0.1; // 最低温度
+
+        int iteration = 0;
+        while (temperature > minTemperature) {
+            // 生成邻居解（随机交换两个车辆的任务）
+            Map<Truck, List<Task>> newSolution = generateNeighborSolution(currentSolution);
+
+            // 计算成本差
+            double currentCost = calculateTotalCost(currentSolution);
+            double newCost = calculateTotalCost(newSolution);
+            double costDiff = newCost - currentCost;
+
+            // 决定是否接受新解
+            if (costDiff < 0 || Math.random() < Math.exp(-costDiff / temperature)) {
+                currentSolution = newSolution;
+
+                // 更新最优解
+                if (newCost < calculateTotalCost(bestSolution)) {
+                    bestSolution = deepCopySolution(newSolution);
+                }
+            }
+
+            // 降低温度（缩圈）
+            temperature *= coolingRate;
+            iteration++;
+
+            if (iteration % 10 == 0) {
+                log.info("模拟退火迭代 {}: 温度={}, 当前成本={}, 最优成本={}",
+                        iteration, String.format("%.2f", temperature), 
+                        String.format("%.2f", currentCost), 
+                        String.format("%.2f", calculateTotalCost(bestSolution)));
+            }
+        }
+
+        log.info("模拟退火优化完成，迭代次数={}, 最优成本={}", iteration, 
+                String.format("%.2f", calculateTotalCost(bestSolution)));
+        return bestSolution;
+    }
+
+    /**
+     * 模拟退火算法优化（支持初始解）
+     * 用于在已有较好解的基础上进行精细优化
+     *
+     * @param trucks       车辆列表
+     * @param tasks        任务列表
+     * @param initialSolution 初始解（由遗传算法提供）
+     * @return 优化后的解
+     */
+    public Map<Truck, List<Task>> simulatedAnnealingOptimization(List<Truck> trucks, List<Task> tasks, 
+                                                                 Map<Truck, List<Task>> initialSolution) {
+        // 使用传入的初始解
+        Map<Truck, List<Task>> currentSolution = deepCopySolution(initialSolution);
+        Map<Truck, List<Task>> bestSolution = deepCopySolution(currentSolution);
+
+        // 使用较低的初始温度进行精细优化
+        double temperature = 100.0;  // 初始温度较低，直接进入精细搜索阶段
+        double coolingRate = 0.98;   // 冷却速率较慢，搜索更精细
+        double minTemperature = 0.01;
+
+        int iteration = 0;
+        while (temperature > minTemperature) {
+            Map<Truck, List<Task>> newSolution = generateNeighborSolution(currentSolution);
+
+            double currentCost = calculateTotalCost(currentSolution);
+            double newCost = calculateTotalCost(newSolution);
+            double costDiff = newCost - currentCost;
+
+            if (costDiff < 0 || Math.random() < Math.exp(-costDiff / temperature)) {
+                currentSolution = newSolution;
+                if (newCost < calculateTotalCost(bestSolution)) {
+                    bestSolution = deepCopySolution(newSolution);
+                }
+            }
+
+            temperature *= coolingRate;
+            iteration++;
+        }
+
+        log.info("模拟退火精细优化完成，迭代次数={}, 最优成本={}", iteration, 
+                String.format("%.2f", calculateTotalCost(bestSolution)));
+        return bestSolution;
+    }
+
+    /**
+     * 混合优化算法（真实实现，替换原占位版本）：
+     * 阶段1 遗传算法全局搜索 → 阶段2 以GA结果为初始解的模拟退火精修 → 阶段3 超载贪心修复。
+     *
+     * @param trucks 车辆列表
+     * @param tasks  任务列表
+     * @return 优化后的任务分配方案
+     */
+    public Map<Truck, List<Task>> hybridOptimization(List<Truck> trucks, List<Task> tasks) {
+        long start = System.currentTimeMillis();
+        if (trucks == null || trucks.isEmpty() || tasks == null || tasks.isEmpty()) {
+            return new HashMap<>();
+        }
+        log.info("=== 开始混合优化（真实执行：GA全局搜索 + SA精修 + 超载修复） ===");
+
+        // 阶段1：遗传算法全局搜索
+        Map<Truck, List<Task>> gaResult = geneticAlgorithmOptimization(trucks, tasks);
+        double gaCost = calculateTotalCost(gaResult);
+        log.info("阶段1 遗传算法完成，成本={}", String.format("%.2f", gaCost));
+
+        // 阶段2：以GA结果为初始解的模拟退火精细优化
+        Map<Truck, List<Task>> saResult = simulatedAnnealingOptimization(trucks, tasks, gaResult);
+        double saCost = calculateTotalCost(saResult);
+        log.info("阶段2 模拟退火完成，成本={}", String.format("%.2f", saCost));
+
+        // 阶段3：超载贪心修复（取两阶段中较优者做可行性修正）
+        Map<Truck, List<Task>> finalResult = repairOverload(saCost <= gaCost ? saResult : gaResult);
+        double finalCost = calculateTotalCost(finalResult);
+
+        log.info("混合优化完成：最终成本={}, 总耗时={}ms",
+                String.format("%.2f", finalCost), System.currentTimeMillis() - start);
+        return finalResult;
+    }
+
+    /**
+     * 贪心局部修正：把超载车辆上的任务迁移到有剩余载重能力的车辆，直到无迁移可能。
+     */
+    private Map<Truck, List<Task>> repairOverload(Map<Truck, List<Task>> solution) {
+        for (int pass = 0; pass < 3; pass++) {
+            boolean moved = false;
+            for (Map.Entry<Truck, List<Task>> entry : solution.entrySet()) {
+                Truck truck = entry.getKey();
+                List<Task> list = entry.getValue();
+                BigDecimal load = list.stream()
+                        .map(t -> t.getWeight() != null ? t.getWeight() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (truck.getMaxWeight() == null || load.compareTo(truck.getMaxWeight()) <= 0) {
+                    continue;
+                }
+                for (Task task : new ArrayList<>(list)) {
+                    BigDecimal w = task.getWeight() != null ? task.getWeight() : BigDecimal.ZERO;
+                    for (Map.Entry<Truck, List<Task>> other : solution.entrySet()) {
+                        if (other.getKey().getId().equals(truck.getId()) || other.getKey().getMaxWeight() == null) {
+                            continue;
+                        }
+                        List<Task> oList = other.getValue();
+                        BigDecimal oLoad = oList.stream()
+                                .map(t -> t.getWeight() != null ? t.getWeight() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        if (oLoad.add(w).compareTo(other.getKey().getMaxWeight()) <= 0) {
+                            oList.add(task);
+                            list.remove(task);
+                            moved = true;
+                            break;
+                        }
+                    }
+                    if (moved) break;
+                }
+                if (moved) break;
+            }
+            if (!moved) break;
+        }
+        return solution;
+    }
+
+    /**
+     * 模拟吃鸡缩圈淘汰机制
+     * 在每次迭代中，淘汰表现最差的部分解
+     *
+     * @param solutions      候选解列表
+     * @param eliminationRate 淘汰率（0-1）
+     * @return 淘汰后的解列表
+     */
+    public List<Map<Truck, List<Task>>> zoneShrinkElimination(List<Map<Truck, List<Task>>> solutions, double eliminationRate) {
+        // 按成本排序
+        solutions.sort(Comparator.comparingDouble(this::calculateTotalCost));
+
+        // 计算淘汰数量
+        int keepCount = (int) (solutions.size() * (1 - eliminationRate));
+        if (keepCount < 1) keepCount = 1;
+
+        log.info("缩圈淘汰: 原始解数量={}, 淘汰率={}, 保留数量={}", solutions.size(), eliminationRate, keepCount);
+
+        // 保留前keepCount个最优解
+        return solutions.subList(0, keepCount);
+    }
+
+    // ==================== 遗传算法 ====================
+
+    /**
+     * 遗传算法优化路径规划
+     *
+     * @param trucks 车辆列表
+     * @param tasks  任务列表
+     * @return 优化后的任务分配方案
+     */
+    public Map<Truck, List<Task>> geneticAlgorithmOptimization(List<Truck> trucks, List<Task> tasks) {
+        // 参数设置
+        int populationSize = 50;      // 种群大小
+        int maxGenerations = 100;     // 最大迭代次数
+        double crossoverRate = 0.8;   // 交叉概率
+        double mutationRate = 0.1;    // 变异概率
+
+        // 1. 初始化种群
+        List<Map<Truck, List<Task>>> population = initializePopulation(populationSize, trucks, tasks);
+
+        Map<Truck, List<Task>> bestSolution = null;
+        double bestCost = Double.MAX_VALUE;
+
+        for (int generation = 0; generation < maxGenerations; generation++) {
+            // 2. 适应度评估
+            List<Double> fitnessScores = population.stream()
+                    .map(this::calculateTotalCost)
+                    .collect(Collectors.toList());
+
+            // 3. 选择（轮盘赌选择）
+            List<Map<Truck, List<Task>>> selected = selection(population, fitnessScores);
+
+            // 4. 交叉
+            List<Map<Truck, List<Task>>> offspring = crossover(selected, crossoverRate);
+
+            // 5. 变异
+            mutate(offspring, mutationRate);
+
+            // 6. 替换种群
+            population = elitistReplacement(population, offspring);
+
+            // 记录最优解
+            Map<Truck, List<Task>> currentBest = population.stream()
+                    .min(Comparator.comparingDouble(this::calculateTotalCost))
+                    .orElse(null);
+
+            if (currentBest != null) {
+                double currentCost = calculateTotalCost(currentBest);
+                if (currentCost < bestCost) {
+                    bestCost = currentCost;
+                    bestSolution = deepCopySolution(currentBest);
+                }
+            }
+
+            if (generation % 10 == 0) {
+                log.info("遗传算法代次 {}: 最优成本={}", generation, String.format("%.2f", bestCost));
+            }
+        }
+
+        log.info("遗传算法优化完成，最优成本={}", String.format("%.2f", bestCost));
+        return bestSolution;
+    }
+
+    /**
+     * 初始化种群
+     */
+    private List<Map<Truck, List<Task>>> initializePopulation(int size, List<Truck> trucks, List<Task> tasks) {
+        List<Map<Truck, List<Task>>> population = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            population.add(randomAssignment(trucks, tasks));
+        }
+        return population;
+    }
+
+    /**
+     * 选择操作（轮盘赌）
+     */
+    private List<Map<Truck, List<Task>>> selection(List<Map<Truck, List<Task>>> population, List<Double> fitnessScores) {
+        // 转换为最大化问题（成本越小越好，转换为适应度越大越好）
+        double minCost = fitnessScores.stream().mapToDouble(Double::doubleValue).min().orElse(1);
+        List<Double> adjustedFitness = fitnessScores.stream()
+                .map(cost -> 1 / (cost + minCost + 1)) // 转换为适应度
+                .collect(Collectors.toList());
+
+        double totalFitness = adjustedFitness.stream().mapToDouble(Double::doubleValue).sum();
+
+        List<Map<Truck, List<Task>>> selected = new ArrayList<>();
+        for (int i = 0; i < population.size(); i++) {
+            double r = Math.random() * totalFitness;
+            double cumulative = 0;
+            for (int j = 0; j < adjustedFitness.size(); j++) {
+                cumulative += adjustedFitness.get(j);
+                if (cumulative >= r) {
+                    selected.add(deepCopySolution(population.get(j)));
+                    break;
+                }
+            }
+        }
+        return selected;
+    }
+
+    /**
+     * 交叉操作
+     */
+    private List<Map<Truck, List<Task>>> crossover(List<Map<Truck, List<Task>>> parents, double crossoverRate) {
+        List<Map<Truck, List<Task>>> offspring = new ArrayList<>();
+        Random random = new Random();
+
+        for (int i = 0; i < parents.size(); i += 2) {
+            if (i + 1 < parents.size() && Math.random() < crossoverRate) {
+                Map<Truck, List<Task>> parent1 = parents.get(i);
+                Map<Truck, List<Task>> parent2 = parents.get(i + 1);
+
+                // 获取所有任务
+                List<Task> allTasks = new ArrayList<>();
+                for (List<Task> tasks : parent1.values()) {
+                    allTasks.addAll(tasks);
+                }
+
+                // 创建子解
+                Map<Truck, List<Task>> child1 = createEmptyAssignment(new ArrayList<>(parent1.keySet()));
+                Map<Truck, List<Task>> child2 = createEmptyAssignment(new ArrayList<>(parent2.keySet()));
+
+                // 使用单点交叉：随机选择一个分割点
+                int crossPoint = random.nextInt(allTasks.size());
+
+                // 收集已经分配的任务
+                Set<Task> assignedToChild1 = new HashSet<>();
+                Set<Task> assignedToChild2 = new HashSet<>();
+
+                // 前crossPoint个任务从parent1分配
+                int taskIdx = 0;
+                for (Truck truck : parent1.keySet()) {
+                    for (Task task : parent1.get(truck)) {
+                        if (taskIdx < crossPoint) {
+                            child1.get(truck).add(task);
+                            assignedToChild1.add(task);
+                        }
+                        taskIdx++;
+                    }
+                }
+
+                // 后部分任务从parent2分配，确保不重复
+                for (Truck truck : parent2.keySet()) {
+                    for (Task task : parent2.get(truck)) {
+                        if (!assignedToChild1.contains(task)) {
+                            // 找到第一个有空间的车辆
+                            for (Truck targetTruck : child1.keySet()) {
+                                if (!child1.get(targetTruck).contains(task)) {
+                                    child1.get(targetTruck).add(task);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // child2相反
+                taskIdx = 0;
+                for (Truck truck : parent2.keySet()) {
+                    for (Task task : parent2.get(truck)) {
+                        if (taskIdx < crossPoint) {
+                            child2.get(truck).add(task);
+                            assignedToChild2.add(task);
+                        }
+                        taskIdx++;
+                    }
+                }
+
+                for (Truck truck : parent1.keySet()) {
+                    for (Task task : parent1.get(truck)) {
+                        if (!assignedToChild2.contains(task)) {
+                            for (Truck targetTruck : child2.keySet()) {
+                                if (!child2.get(targetTruck).contains(task)) {
+                                    child2.get(targetTruck).add(task);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                offspring.add(child1);
+                offspring.add(child2);
+            } else {
+                offspring.add(deepCopySolution(parents.get(i)));
+                if (i + 1 < parents.size()) {
+                    offspring.add(deepCopySolution(parents.get(i + 1)));
+                }
+            }
+        }
+        return offspring;
+    }
+
+    /**
+     * 变异操作 - 随机将一个任务从一辆车移动到另一辆车
+     */
+    private void mutate(List<Map<Truck, List<Task>>> population, double mutationRate) {
+        for (Map<Truck, List<Task>> solution : population) {
+            if (Math.random() < mutationRate) {
+                List<Truck> truckList = new ArrayList<>(solution.keySet());
+                if (truckList.size() >= 2) {
+                    // 随机选择两个不同的车辆
+                    int idx1 = new Random().nextInt(truckList.size());
+                    int idx2 = new Random().nextInt(truckList.size());
+                    while (idx1 == idx2 && truckList.size() > 1) {
+                        idx2 = new Random().nextInt(truckList.size());
+                    }
+
+                    Truck truck1 = truckList.get(idx1);
+                    Truck truck2 = truckList.get(idx2);
+
+                    List<Task> tasks1 = solution.get(truck1);
+                    List<Task> tasks2 = solution.get(truck2);
+
+                    if (!tasks1.isEmpty()) {
+                        // 随机选择一个任务从truck1移动到truck2
+                        int taskIdx = new Random().nextInt(tasks1.size());
+                        Task taskToMove = tasks1.remove(taskIdx);
+                        tasks2.add(taskToMove);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 创建空的任务分配方案
+     */
+    private Map<Truck, List<Task>> createEmptyAssignment(List<Truck> trucks) {
+        Map<Truck, List<Task>> assignment = new HashMap<>();
+        for (Truck truck : trucks) {
+            assignment.put(truck, new ArrayList<>());
+        }
+        return assignment;
+    }
+
+    /**
+     * 精英保留策略
+     */
+    private List<Map<Truck, List<Task>>> elitistReplacement(List<Map<Truck, List<Task>>> oldPopulation, List<Map<Truck, List<Task>>> offspring) {
+        // 合并旧种群和新种群
+        List<Map<Truck, List<Task>>> combined = new ArrayList<>();
+        combined.addAll(oldPopulation);
+        combined.addAll(offspring);
+
+        // 按成本排序，保留最优的前N个
+        combined.sort(Comparator.comparingDouble(this::calculateTotalCost));
+        return combined.subList(0, oldPopulation.size());
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 随机分配任务
+     */
+    private Map<Truck, List<Task>> randomAssignment(List<Truck> trucks, List<Task> tasks) {
+        Map<Truck, List<Task>> assignment = new HashMap<>();
+        for (Truck truck : trucks) {
+            assignment.put(truck, new ArrayList<>());
+        }
+
+        List<Task> shuffledTasks = new ArrayList<>(tasks);
+        Collections.shuffle(shuffledTasks);
+
+        int idx = 0;
+        for (Task task : shuffledTasks) {
+            Truck truck = trucks.get(idx % trucks.size());
+            assignment.get(truck).add(task);
+            idx++;
+        }
+
+        return assignment;
+    }
+
+    /**
+     * 生成邻居解（随机交换任务）
+     */
+    private Map<Truck, List<Task>> generateNeighborSolution(Map<Truck, List<Task>> solution) {
+        Map<Truck, List<Task>> neighbor = deepCopySolution(solution);
+        List<Truck> truckList = new ArrayList<>(neighbor.keySet());
+
+        if (truckList.size() < 2) return neighbor;
+
+        // 随机选择两个车辆
+        Truck truck1 = truckList.get(new Random().nextInt(truckList.size()));
+        Truck truck2 = truckList.get(new Random().nextInt(truckList.size()));
+
+        List<Task> tasks1 = neighbor.get(truck1);
+        List<Task> tasks2 = neighbor.get(truck2);
+
+        if (!tasks1.isEmpty() && !tasks2.isEmpty()) {
+            // 随机交换一个任务
+            int idx1 = new Random().nextInt(tasks1.size());
+            int idx2 = new Random().nextInt(tasks2.size());
+
+            Task temp = tasks1.get(idx1);
+            tasks1.set(idx1, tasks2.get(idx2));
+            tasks2.set(idx2, temp);
+        }
+
+        return neighbor;
+    }
+
+    /**
+     * 深拷贝任务分配方案
+     */
+    private Map<Truck, List<Task>> deepCopySolution(Map<Truck, List<Task>> solution) {
+        Map<Truck, List<Task>> copy = new HashMap<>();
+        for (Map.Entry<Truck, List<Task>> entry : solution.entrySet()) {
+            copy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return copy;
+    }
+
+    /**
+     * 计算总任务分配成本
+     */
+    private double calculateTotalCost(Map<Truck, List<Task>> solution) {
+        double totalCost = 0;
+        for (Map.Entry<Truck, List<Task>> entry : solution.entrySet()) {
+            Truck truck = entry.getKey();
+            List<Task> tasks = entry.getValue();
+
+            // 计算车辆负载（使用任务的weight字段）
+            double totalWeight = tasks.stream()
+                    .mapToDouble(t -> t.getWeight() != null ? t.getWeight().doubleValue() : 0)
+                    .sum();
+
+            // 计算成本 = 负载惩罚 + 任务数量成本
+            double capacity = truck.getMaxWeight() != null ? truck.getMaxWeight().doubleValue() : 100;
+            double loadPenalty = totalWeight > capacity ? (totalWeight - capacity) * 10 : 0;
+            double taskCost = tasks.size() * 10; // 每个任务基础成本
+
+            totalCost += loadPenalty + taskCost;
+        }
+
+        return totalCost;
+    }
+}

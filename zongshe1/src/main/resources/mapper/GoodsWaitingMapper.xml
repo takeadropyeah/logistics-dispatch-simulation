@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.GoodsWaitingMapper">
+    <resultMap id="BaseResultMap" type="com.muite.zongshe1.entity.GoodsWaiting">
+        <id column="id" property="id"/>
+        <result column="goods_id" property="goodsId"/>
+        <result column="waiting_type" property="waitingType"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="waiting_reason" property="waitingReason"/>
+        <result column="waiting_location" property="waitingLocation"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, goods_id, waiting_type, start_time, end_time, waiting_reason, waiting_location
+    </sql>
+
+    <select id="selectByPrimaryKey" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_waiting
+        where id = #{id}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_waiting
+        order by start_time desc
+    </select>
+
+    <select id="selectByGoodsId" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_waiting
+        where goods_id = #{goodsId}
+        order by start_time desc
+    </select>
+
+    <select id="selectActiveWaiting" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_waiting
+        where end_time is null
+        order by start_time asc
+    </select>
+
+    <select id="selectLongWaiting" resultMap="BaseResultMap">
+        select <include refid="Base_Column_List"/>
+        from goods_waiting
+        where end_time is null
+        and TIMESTAMPDIFF(HOUR, start_time, NOW()) > #{hours}
+        order by start_time asc
+    </select>
+
+    <delete id="deleteByPrimaryKey">
+        delete from goods_waiting
+        where id = #{id}
+    </delete>
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.GoodsWaiting" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_waiting (goods_id, waiting_type, start_time, end_time, waiting_reason, waiting_location)
+        values (#{goodsId}, #{waitingType}, #{startTime}, #{endTime}, #{waitingReason}, #{waitingLocation})
+    </insert>
+
+    <insert id="insertSelective" parameterType="com.muite.zongshe1.entity.GoodsWaiting" useGeneratedKeys="true" keyProperty="id">
+        insert into goods_waiting
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">goods_id,</if>
+            <if test="waitingType != null">waiting_type,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="waitingReason != null">waiting_reason,</if>
+            <if test="waitingLocation != null">waiting_location,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="goodsId != null">#{goodsId},</if>
+            <if test="waitingType != null">#{waitingType},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="waitingReason != null">#{waitingReason},</if>
+            <if test="waitingLocation != null">#{waitingLocation},</if>
+        </trim>
+    </insert>
+
+    <update id="updateByPrimaryKeySelective" parameterType="com.muite.zongshe1.entity.GoodsWaiting">
+        update goods_waiting
+        <set>
+            <if test="goodsId != null">goods_id = #{goodsId},</if>
+            <if test="waitingType != null">waiting_type = #{waitingType},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="waitingReason != null">waiting_reason = #{waitingReason},</if>
+            <if test="waitingLocation != null">waiting_location = #{waitingLocation},</if>
+        </set>
+        where id = #{id}
+    </update>
+</mapper>

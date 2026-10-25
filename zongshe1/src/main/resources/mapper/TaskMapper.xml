@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.muite.zongshe1.mapper.TaskMapper">
+
+
+    <insert id="insert" parameterType="com.muite.zongshe1.entity.Task" useGeneratedKeys="true" keyProperty="id">
+        insert into task (start,destination,goods_type,truck_id,sender_id,receiver_id,sender_name,receiver_name,weight,volume)
+        values (#{start},#{destination},#{goodsType},#{truckId},#{senderId},#{receiverId},#{senderName},#{receiverName},#{weight},#{volume})
+    </insert>
+
+    <update id="updateTaskTruckId" parameterType="com.muite.zongshe1.entity.Task">
+        UPDATE task
+        SET truck_id = #{truckId}
+        WHERE id = #{id}
+    </update>
+    <update id="updateStatus" parameterType="com.muite.zongshe1.entity.Task">
+        UPDATE task
+        SET status=#{status}
+        WHERE id = #{id}
+    </update>
+
+
+    <select id="selectAll" resultType="com.muite.zongshe1.entity.Task">
+        SELECT * FROM task
+    </select>
+
+    <select id="selectByPrimaryKey" parameterType="java.lang.Integer" resultType="com.muite.zongshe1.entity.Task">
+        select * from task where id = #{id,jdbcType=INTEGER}
+    </select>
+
+    <select id="selectByTruckId" parameterType="java.lang.Integer" resultType="com.muite.zongshe1.entity.Task">
+        select * from task where truck_id = #{truckId,jdbcType=INTEGER} and status != '已完成' order by id desc limit 1
+    </select>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO task (start, destination, goods_type, status, truck_id,weight,volume,sender_id,receiver_id,sender_name,receiver_name,goods_id)
+        VALUES
+        <foreach collection="list" item="task" separator=",">
+            (
+            #{task.start},
+            #{task.destination},
+            #{task.goodsType},
+            #{task.status},
+            #{task.truckId},
+            #{task.weight},
+            #{task.volume},
+            #{task.senderId},
+            #{task.receiverId},
+            #{task.senderName},
+            #{task.receiverName},
+            #{task.goodsId}
+            )
+        </foreach>
+    </insert>
+
+
+
+</mapper>
