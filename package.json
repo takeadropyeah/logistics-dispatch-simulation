@@ -1,0 +1,24 @@
+{
+  "name": "logistics-dispatch-simulation",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:motion": "node tests/vehicleMotion.test.mjs && node tests/mapIntegration.test.mjs"
+  },
+  "dependencies": {
+    "echarts": "5.6.0",
+    "vue": "3.5.43",
+    "@amap/amap-jsapi-loader": "1.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.1",
+    "vite": "6.4.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

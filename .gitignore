@@ -1,33 +1,6 @@
-# ===== Java / Maven =====
-zongshe1/target/
-*.class
-*.jar
-!.mvn/wrapper/maven-wrapper.jar
-*.war
-
-# ===== 前端 =====
-amapzongshe/node_modules/
-amapzongshe/dist/
-amapzongshe/*.local
-
-# ===== 日志 =====
-logs/
+node_modules/
+dist/
+.vite/
+.env.local
+.env.*.local
 *.log
-output.log
-
-# ===== IDE =====
-.idea/
-.vscode/
-*.iml
-.trae/
-.DS_Store
-
-# ===== 课程资料（本地保存，不入库） =====
-docs-task/
-
-# ===== 本地个性化配置（各自数据库密码不同，不入库） =====
-application-local.yml
-zongshe1/src/main/resources/application-local.yml
-
-# ===== 系统文件 =====
-Thumbs.db

@@ -1,134 +1,113 @@
 # 物流运输调度仿真系统
 
-进阶式挑战性综合课程设计 III（智能交通）课题：**运输车辆调度优化与仿真**。
+这是融合 `dashboard` 两页可视化看板与 `amapzongshe` 地图仿真前端的新 Vue 项目。采用 Vue 3、Vite、ECharts 与高德 JS API，延续 dashboard 的深色科技风格。
 
-基于高德地图真实路网的物流运输调度仿真平台：钢铁产业链运输任务自动生成 → 车辆派单匹配 → 路径规划 → 200ms 周期移动仿真 → WebSocket 实时大屏可视化，配套 **八维专业评价指标体系** 与 **可复现的数据实验沙箱**。
+## 1.0.1 修正版
 
-## 技术栈
+- 高德底图恢复原来的标准彩色样式。
+- 车辆改为由一处逐帧绘制，按实际后端位置沿道路折线插值；取消两路 `moveTo` 互相拉回和跨弯道直线移动。
+- 取货与运输路线分开处理；丢弃过期、倒退、离路位置，等待、断线和暂停时不再按墙钟继续预测。任务结束会清理旧路线，重新派车会刷新路线缓存。
+- 全局运力利用仪表盘使用自适应半圆，百分比和指标说明分开，避免数字裁切或与文字重叠。
 
-| 端 | 技术 |
-|---|---|
-| 后端 | JDK 17 · Spring Boot 3.5.5 · MyBatis · MySQL 8 · WebSocket · Knife4j(OpenAPI) |
-| 前端 | Vue 3 · Vite 7 · ECharts 6 · 高德 JS API 2.0 |
-| 外部服务 | 高德 Web 服务 API（路径规划 / POI 搜索） |
+**后端也需要配套更新。** 原 `SimulationService.java` 会把取货路点倒序使用，并在运输阶段混入取货路线。本次交付包根目录的 `backend-fix/` 提供已编译验证的单文件修复与说明；需替换原后端同名文件并重启。此次未获得 E 盘写权限，原后端未直接修改。旧后端发来的错误路线位置会被前端拒绝，这时车辆可能等待下一条有效采样，不能依靠前端恢复正确的服务端行程。
 
-## 核心功能
+轨迹回归检查：`npm run test:motion`。包含纯轨迹算法与实际地图组件脚本两层测试，覆盖转弯、采样回退、暂停重连、阶段切换和路线缓存生命周期。检查使用隔离的事件回放，不会连接或改变真实后端。
 
-- **实时调度仿真大屏**：地图车辆动画（跟随模式/车队总览）、路线绘制、POI 海量点、顶部系统栏
-- **八维评价指标看板**（📈 综合评价）：匹配精准度(M)、资源利用(U)、吞吐响应(T)、算法效率(A)、成本效益(C)、可靠性(R)、公平性(F)、绿色低碳(G)，30 秒快照趋势
-- **数据实验沙箱**（🧪）：确定性仿真引擎（同种子结果逐位可复现），贪心/模拟退火/遗传三种派单算法对照实验，批次管理与对比分析
-- **司机行为状态引擎**：拒单冷却 / 疲劳休息 / 休假 / 保养 / 故障，5 种以数学概率驱动的状态
-- **随机事件**：交通拥堵、货物损耗、极端天气、车辆故障、缺货（5 种）
+## 融合后的页面
 
-## 快速开始
+中央保留高德地图、仿真控制面板、车辆监控列表及原有分析入口。精选图表分布在地图左侧、右侧和底部，顶部统一显示“物流运输调度仿真系统”。
 
-### 环境要求
+| 页面 | 左侧 | 右侧 | 底部 |
+| --- | --- | --- | --- |
+| 01 调度效果（6 图） | 车辆匹配准确度、车辆资源利用 | 单位运输成本、司机负载均衡 | 全局运力利用、优化 Gap 趋势 |
+| 02 运行性能（5 图） | 吞吐量、响应时间分布 | 时间—规模曲线、生成时间间隔 Jitter | 吞吐量—响应时间曲线 |
 
-- JDK 17+、Maven 3.6+（或 IDEA 自带）
-- Node.js 20.19+ / 22.12+
-- MySQL 5.7 / 8.0 / 9.x（本机 3306）
-- 高德开放平台账号（免费）：https://lbs.amap.com
+可使用页签或左右翻页按钮切换两页。地图组件始终挂载在同一位置；翻页只切换周围图表，保留地图视角、车辆跟随、仿真连接、控制状态及已打开的地图分析面板。
 
-### 1. 初始化数据库
+保留的地图操作包括：重载连接、POI 显隐、路线显隐、车辆列表显隐、车队总览、开始/暂停仿真、倍速调整、随机任务生成、车辆定位/跟随、车辆分析、货物分析、成本分析、综合评价和数据实验沙箱。控制面板可以收起，为地图留出更多空间。顶部全屏按钮作用于整个融合看板。
 
-用 Workbench 或命令行执行 [`sql/init.sql`](sql/init.sql)（创建 `zongshe` 库与 5 张核心表，其余表后端启动时自动创建）。
+## 启动前端
 
-### 2. 申请高德 key（免费，约 5 分钟）
+环境：Node.js 22+、npm。
 
-1. 登录高德开放平台 → 控制台 → 应用管理 → 创建新应用；
-2. 为应用添加两个 key：
-   - **Web端(JS API)** 类型 → 用于前端地图；
-   - **Web服务** 类型 → 用于后端路径规划/POI。
+Windows 可直接双击 `启动项目.cmd`；缺少依赖时会自动安装，然后打开浏览器。已展开的交付文件夹包含本机可用依赖，源码压缩包不包含 `node_modules`。
 
-### 3. 配置密钥（不入库）
+在本项目目录运行：
 
-- 后端：新建 `zongshe1/src/main/resources/application-local.yml`（已被 .gitignore 排除）：
+```bash
+npm ci
+npm run dev
+```
 
-  ```yaml
-  amap:
-    key: "你的Web服务key"
-  spring:
-    datasource:
-      password: 你的MySQL密码
-  ```
+打开终端显示的本地地址，默认是 `http://127.0.0.1:5173`。如果该端口已占用，Vite 会选择下一个可用端口。
 
-- 前端：在 `amapzongshe` 目录新建 `.env.local`（已排除）：
+生产构建与本地预览：
 
-  ```ini
-  VITE_AMAP_KEY=你的JS_API_key
-  VITE_AMAP_SECURITY_CODE=对应的安全密钥（没有可留空）
-  ```
+```bash
+npm run build
+npm run preview
+```
 
-> 仓库里的配置文件只有占位符，真实密钥都在各自的本地文件里，不要提交。
+构建结果位于 `dist/`；预览地址以终端输出为准。部署时将 `dist/` 交给静态服务器。前端构建不会打包或启动 Java 后端。
 
-### 4. 启动后端（8080）
+## 高德地图与仿真服务配置
+
+在项目根目录使用 `.env.local` 保存本机配置。交付目录已将原前端本地高德配置迁移到该文件，源码内没有密钥兜底；不要将此文件提交到版本库。
+
+需要更换环境时，按以下格式填写自己的值：
+
+```ini
+VITE_AMAP_KEY=你的高德Web端JS_API_Key
+VITE_AMAP_SECURITY_CODE=对应的安全密钥
+VITE_API_BASE_URL=http://localhost:8080
+VITE_WS_URL=ws://localhost:8080/vehicle-simulation
+```
+
+| 变量 | 用途 / 默认行为 |
+| --- | --- |
+| `VITE_AMAP_KEY` | 高德 Web 端（JS API）类型的 Key；未配置时提示补充配置 |
+| `VITE_AMAP_SECURITY_CODE` | 对应的高德安全密钥 |
+| `VITE_API_BASE_URL` | 原仿真后端的 HTTP 地址；默认 `http://localhost:8080` |
+| `VITE_WS_URL` | 实时车辆 WebSocket 地址；省略时由 API 地址转换为 `ws`/`wss` 并追加 `/vehicle-simulation` |
+
+配置入口为 `src/map/config/index.js`。修改环境变量后需要重启 Vite；生产部署需重新构建。前端使用的 `VITE_` 变量会进入浏览器构建，请在高德控制台配置相应使用域名及访问限制。HTTPS 页面应配套 HTTPS API 与 WSS WebSocket 地址。
+
+## 原后端如何配合
+
+本项目继续连接原 `logistics-dispatch-simulation-main/zongshe1` 后端，未启动或直接修改原后端。地图底图需要高德服务；车辆、路线、POI、仿真指标、控制操作和分析窗口需要原后端正常运行。修正版另附一个后端文件的修复副本。
+
+原后端环境为 JDK 17、Maven 3.6+、MySQL，使用 `zongshe` 数据库。首次运行请按原项目 README 执行 `sql/init.sql`，并在 `zongshe1/src/main/resources/application-local.yml` 配置自己的数据库连接与高德 **Web 服务** Key。后端 Web 服务 Key 与前端 JS API Key 属于不同用途。
+
+完成后端配置后，在原项目目录自行启动：
 
 ```bash
 cd zongshe1
 mvn spring-boot:run
 ```
 
-启动成功后接口文档：http://localhost:8080/doc.html
+默认接口文档是 `http://localhost:8080/doc.html`，实时车辆地址是 `ws://localhost:8080/vehicle-simulation`。没有车辆时，可以在原接口文档中调用 `POST /simulation/generate-vehicles?count=10` 生成车队，再使用本前端的“开始仿真”。
 
-### 5. 启动前端（5173）
+前端直连配置的 API 地址，未设置开发代理。更换服务器后应确认后端允许该前端来源，且 WebSocket 能从浏览器访问。未启动后端时，页面会显示服务未连接；不会把示例图表当作在线车辆状态。
 
-```bash
-cd amapzongshe
-npm install
-npm run dev
-```
+## 图表数据说明
 
-打开 http://localhost:5173 ，点左侧"▶ 开始仿真"，在 doc.html 调用 `POST /simulation/generate-vehicles?count=10` 生成车队（或等系统每 30 秒自动生成任务）。
+- **地图、车辆与原分析窗口**：沿用原后端接口和 WebSocket，显示仿真服务提供的数据。后端未连接或数据为空时显示相应状态。
+- **地图四周的 6 + 5 个图表和顶部图表指标**：保留 dashboard 的示例数据及演示/对照交互，页面有明确的“示例数据”标识。它们目前独立于地图仿真，地图上的车队变化不会自动更新这些示例图表。
+- 调度效果页支持自动演示、方案对照及示例实验选择；运行性能页支持暂停/恢复图表刷新、手动刷新、点击曲线或负载档位查看结果。
 
-## 常用接口
+后续如需让外围图表展示后端真实实验结果，可从 `src/services/dispatchSource.js` 与 `src/services/performanceSource.js` 接入，并同步映射指标、基线、实验曲线、单位和来源标识。仅修改“示例”字样不会接入真实数据。
 
-| 接口 | 说明 |
-|---|---|
-| `GET /metrics/overview` | 八维指标实时总览 |
-| `GET /metrics/gap` | 优化 gap（精确枚举 vs 贪心/退火） |
-| `POST /sandbox/experiment/{id}/run` | 沙箱运行一批次 |
-| `POST /sandbox/run/{runId}/verify` | 同种子复现校验 |
-| `POST /simulation/generate-vehicles?count=N` | 生成车队 |
-| `GET /generate/steelChain?count=N` | 生成钢铁产业链任务 |
+## 代码位置
 
-## 协作流程（Fork + Pull Request）
+| 位置 | 内容 |
+| --- | --- |
+| `src/App.vue` | 融合布局、系统名称、双页切换及常驻地图 |
+| `src/components/SurroundCharts.vue` | 两页精选图表与交互 |
+| `src/map/SimulationMap.vue` | 从原项目整合的地图、仿真控制与车辆监控 |
+| `src/map/components/` | 原车辆/货物/成本分析、综合评价、实验沙箱 |
+| `src/map/config/index.js` | 高德、HTTP、WebSocket 统一配置 |
+| `src/styles/fusion.css`、`src/styles/surround.css` | 融合页面与周边图表布局 |
 
-本仓库为公开仓库，**直接推送需要协作者权限**；小组成员默认走 fork 流程：
+建议使用桌面浏览器及较宽屏幕查看全景布局；较窄窗口可纵向滚动查看。地图加载失败时可检查网络、高德 Key 类型/安全密钥和域名限制后重试；后端未连接时检查 API/WS 地址与原后端启动状态。
 
-1. **Fork**：点仓库右上角 **Fork** 按钮，把仓库复制到自己账号下；
-2. **Clone 自己的 fork**：
-
-   ```bash
-   git clone https://github.com/你的用户名/logistics-dispatch-simulation.git
-   cd logistics-dispatch-simulation
-   ```
-
-3. **开发**：新建分支写代码（可选但推荐）：
-
-   ```bash
-   git checkout -b feature/你的功能名
-   ```
-
-4. **提交并推送到自己的 fork**：
-
-   ```bash
-   git add -A && git commit -m "简述改动"
-   git push origin feature/你的功能名
-   ```
-
-5. **发起 PR**：回到 GitHub 你的 fork 页面 → **Compare & pull request** → 填写改动说明 → 提交；
-6. 仓库所有者审核后合并进 main。
-
-### 同步上游更新（定期做）
-
-```bash
-git remote add upstream https://github.com/takeadropyeah/logistics-dispatch-simulation.git   # 只需一次
-git fetch upstream && git merge upstream/main
-```
-
-## 注意事项
-
-- 密钥文件（`application-local.yml`、`.env.local`）**永远不要提交**；
-- 提交前先同步上游更新，避免冲突；
-- 提交信息用中文简述变更内容，如 `修复沙箱复现校验的参数绑定`；
-- 高德个人 key 有配额，不要把 key 硬编码回仓库代码里。
+已完成前端构建、浏览器两页切换、地图状态保持、负载选档和五个分析入口检查，高德底图加载正常。本次未启动或修改原 Java 后端，因此在线车辆运行、任务生成和实验执行仍需在后端启动后联调。
